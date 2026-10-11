@@ -1,0 +1,1136 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiklusKu</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#202938}
+header{background:#173b35;color:white;padding:20px}
+header h1{margin:0 0 5px}
+header p{margin:0;font-size:13px}
+nav{display:flex;gap:8px;overflow-x:auto;padding:12px;background:white}
+nav button{flex-shrink:0;border:0;border-radius:8px;padding:11px 14px;background:#eef2f0;color:#173b35}
+nav button.active{background:#173b35;color:white}
+main{max-width:1000px;margin:auto;padding:16px}
+.hidden{display:none}
+.panel,.card{background:white;border:1px solid #e3e8ee;border-radius:12px;padding:16px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.card p{margin:0 0 8px;color:#687386;font-size:13px}
+.card strong{font-size:20px}
+label{display:block;font-size:13px;font-weight:bold;margin:13px 0 6px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #ccd4de;border-radius:8px;background:white;font-size:14px}
+textarea{resize:vertical}
+.primary,.danger,.secondary{border:0;border-radius:8px;padding:11px 13px;cursor:pointer}
+.primary{background:#173b35;color:white;width:100%;margin-top:15px}
+.secondary{background:#e8eeeb;color:#173b35;margin-top:10px}
+.danger{background:#fee2e2;color:#991b1b}
+.muted{color:#687386;font-size:13px;line-height:1.5}
+.message{padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px}
+.success{background:#dcfce7;color:#166534}
+.error{background:#fee2e2;color:#991b1b}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #edf0f4;vertical-align:top}
+th{color:#687386}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.line{border:1px solid #e3e8ee;border-radius:10px;padding:12px;margin:12px 0}
+.line-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.totals{background:#eef2f0;padding:13px;border-radius:8px;line-height:1.8}
+footer{text-align:center;color:#687386;padding:20px;font-size:12px}
+@media(min-width:650px){.cards{grid-template-columns:repeat(3,1fr)}.line-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px}}
+</style>
+</head>
+<body>
+<header>
+<h1>SiklusKu</h1>
+<p>Personal Accounting System</p>
+</header>
+
+<nav>
+<button class="active" data-page="dashboard">Dashboard</button>
+<button data-page="accounts">Daftar Akun</button>
+<button data-page="journal">Jurnal Umum</button>
+<button data-page="ledger">Buku Besar</button>
+<button data-page="reports">Laporan</button>
+<button data-page="trialbalance">Neraca Saldo</button>
+<button data-page="income">Laba Rugi</button>
+<button data-page="balanceSheet">Neraca</button>
+</nav>
+
+<main>
+<section id="dashboard">
+<h2>Dashboard</h2>
+<p class="muted">Ringkasan pencatatan keuanganmu.</p>
+<div class="cards">
+<div class="card"><p>Jumlah Akun</p><strong id="accountCount">0</strong></div>
+<div class="card"><p>Transaksi Jurnal</p><strong id="journalCount">0</strong></div>
+<div class="card"><p>Total Debit Jurnal</p><strong id="debitSummary">Rp0</strong></div>
+</div>
+<div class="panel">
+<h3>Mulai dari sini</h3>
+<p class="muted">Buat daftar akun terlebih dahulu, lalu catat setiap transaksi melalui Jurnal Umum. Pastikan debit dan kredit seimbang.</p>
+</div>
+</section>
+
+<section id="accounts" class="hidden">
+<h2>Daftar Akun</h2>
+<div id="accountMessage"></div>
+<div class="panel">
+<h3>Tambah Akun</h3>
+<form id="accountForm">
+<label for="code">Kode Akun</label>
+<input id="code" required maxlength="20" placeholder="Contoh: 104">
+<label for="name">Nama Akun</label>
+<input id="name" required maxlength="80" placeholder="Contoh: Tabungan">
+<label for="group">Kelompok Akun</label>
+<select id="group">
+<option>Aset</option><option>Liabilitas</option><option>Ekuitas</option><option>Pendapatan</option><option>Beban</option>
+</select>
+<label for="normal">Saldo Normal</label>
+<select id="normal"><option>Debit</option><option>Kredit</option></select>
+<button class="primary" type="submit">Simpan Akun</button>
+</form>
+</div>
+<div class="panel">
+<h3>Akun Tersimpan</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Kode</th><th>Nama Akun</th><th>Kelompok</th><th>Normal</th><th>Aksi</th></tr></thead>
+<tbody id="accountRows"></tbody>
+</table></div>
+</div>
+</section>
+
+<section id="journal" class="hidden">
+<h2>Jurnal Umum</h2>
+<p class="muted">Isi transaksi dan pastikan total debit sama dengan total kredit.</p>
+<div id="journalMessage"></div>
+
+<div class="panel">
+<h3>Catat Transaksi</h3>
+<form id="journalForm">
+<label for="jDate">Tanggal Transaksi</label>
+<input id="jDate" type="date" required>
+<label for="jRef">Nomor Referensi</label>
+<input id="jRef" maxlength="40" placeholder="Contoh: TRX-001">
+<label for="jDesc">Keterangan Transaksi</label>
+<textarea id="jDesc" rows="2" maxlength="250" required placeholder="Contoh: Menerima pendapatan pekerjaan secara tunai"></textarea>
+
+<h3>Rincian Jurnal</h3>
+<div id="journalLines"></div>
+<button type="button" class="secondary" id="addLine">+ Tambah Baris Akun</button>
+
+<div class="totals" style="margin-top:15px">
+<div>Total Debit: <strong id="totalDebit">Rp0</strong></div>
+<div>Total Kredit: <strong id="totalCredit">Rp0</strong></div>
+<div id="balanceStatus">Belum seimbang</div>
+</div>
+<button class="primary" type="submit">Simpan Jurnal</button>
+</form>
+</div>
+
+<div class="panel">
+<h3>Riwayat Jurnal</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tanggal / Referensi</th><th>Keterangan</th><th>Rincian Akun</th><th>Total</th><th>Aksi</th></tr></thead>
+<tbody id="journalRows"></tbody>
+</table></div>
+<p class="muted">Riwayat ditampilkan dari jurnal yang tersimpan di perangkat ini.</p>
+</div>
+</section>
+
+
+<section id="ledger" class="hidden">
+  <h2>Buku Besar</h2>
+  <p class="muted">
+    Pilih akun untuk melihat mutasi dan saldo berjalan
+    berdasarkan jurnal yang tersimpan.
+  </p>
+
+  <div class="panel">
+    <label for="ledgerAccount">Pilih Akun</label>
+    <select id="ledgerAccount"></select>
+
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Referensi</th>
+            <th>Keterangan</th>
+            <th>Debit</th>
+            <th>Kredit</th>
+            <th>Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="ledgerRows"></tbody>
+      </table>
+    </div>
+
+    <p id="ledgerEmpty" class="muted">
+      Belum ada transaksi untuk akun ini.
+    </p>
+  </div>
+</section>
+
+
+<section id="trialbalance" class="page">
+  <h2>Neraca Saldo</h2>
+  <p>Saldo akun berdasarkan seluruh jurnal yang tersimpan.</p>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Debit</th>
+          <th>Kredit</th>
+        </tr>
+      </thead>
+      <tbody id="trialBalanceRows"></tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">TOTAL</th>
+          <th id="trialBalanceDebit">Rp0</th>
+          <th id="trialBalanceCredit">Rp0</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p id="trialBalanceStatus"></p>
+</section>
+
+  
+<section id="income" class="page">
+  <h2>Laporan Laba Rugi</h2>
+  <p>Perhitungan pendapatan, beban, dan laba bersih.</p>
+
+  <h3>Pendapatan</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Nama Akun</th>
+        <th>Jumlah</th>
+      </tr>
+    </thead>
+    <tbody id="incomeRevenueRows"></tbody>
+    <tfoot>
+      <tr>
+        <th>Total Pendapatan</th>
+        <th id="incomeRevenueTotal">Rp0</th>
+      </tr>
+    </tfoot>
+  </table>
+
+  <h3>Beban</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Nama Akun</th>
+        <th>Jumlah</th>
+      </tr>
+    </thead>
+    <tbody id="incomeExpenseRows"></tbody>
+    <tfoot>
+      <tr>
+        <th>Total Beban</th>
+        <th id="incomeExpenseTotal">Rp0</th>
+      </tr>
+    </tfoot>
+  </table>
+
+  <h3>Ringkasan</h3>
+  <table>
+    <tbody>
+      <tr>
+        <td>Total Pendapatan</td>
+        <td id="incomeSummaryRevenue">Rp0</td>
+      </tr>
+      <tr>
+        <td>Total Beban</td>
+        <td id="incomeSummaryExpense">Rp0</td>
+      </tr>
+      <tr>
+        <th id="incomeResultLabel">Laba Bersih</th>
+        <th id="incomeNetResult">Rp0</th>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+
+<section id="balanceSheet" class="page">
+  <h2>Neraca</h2>
+  <p>Laporan Posisi Keuangan</p>
+
+  <h3>Aset</h3>
+  <table>
+    <thead>
+      <tr><th>Nama Akun</th><th>Saldo</th></tr>
+    </thead>
+    <tbody id="bsAssetRows"></tbody>
+    <tfoot>
+      <tr><th>Total Aset</th><th id="bsAssetTotal">Rp0</th></tr>
+    </tfoot>
+  </table>
+
+  <h3>Liabilitas</h3>
+  <table>
+    <thead>
+      <tr><th>Nama Akun</th><th>Saldo</th></tr>
+    </thead>
+    <tbody id="bsLiabilityRows"></tbody>
+    <tfoot>
+      <tr><th>Total Liabilitas</th><th id="bsLiabilityTotal">Rp0</th></tr>
+    </tfoot>
+  </table>
+
+  <h3>Ekuitas</h3>
+  <table>
+    <thead>
+      <tr><th>Nama Akun</th><th>Saldo</th></tr>
+    </thead>
+    <tbody id="bsEquityRows"></tbody>
+    <tfoot>
+      <tr><th>Total Ekuitas</th><th id="bsEquityTotal">Rp0</th></tr>
+    </tfoot>
+  </table>
+
+  <h3>Ringkasan</h3>
+  <table>
+    <tbody>
+      <tr><td>Total Aset</td><td id="bsSummaryAsset">Rp0</td></tr>
+      <tr><td>Total Liabilitas</td><td id="bsSummaryLiability">Rp0</td></tr>
+      <tr><td>Total Ekuitas</td><td id="bsSummaryEquity">Rp0</td></tr>
+      <tr>
+        <th>Liabilitas + Ekuitas</th>
+        <th id="bsLiabilityEquity">Rp0</th>
+      </tr>
+      <tr>
+        <th>Status Neraca</th>
+        <th id="bsStatus">Belum dihitung</th>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+  
+<section id="reports" class="hidden">
+<h2>Laporan</h2>
+<div class="panel">
+<h3>Laporan Belum Aktif</h3>
+<p class="muted">Setelah jurnal umum selesai diuji, tahap selanjutnya adalah Buku Besar, Neraca Saldo, Laporan Laba Rugi, dan Neraca berdasarkan transaksi yang tersimpan.</p>
+</div>
+</section>
+</main>
+<footer>SiklusKu · Versi belajar 0.3</footer>
+
+<script>
+const ACCOUNT_KEY = "siklusku_accounts_v1";
+const JOURNAL_KEY = "siklusku_journals_v1";
+
+const defaults = [
+{id:"a101",code:"101",name:"Kas",group:"Aset",normal:"Debit"},
+{id:"a102",code:"102",name:"Rekening Bank",group:"Aset",normal:"Debit"},
+{id:"a103",code:"103",name:"E-Wallet",group:"Aset",normal:"Debit"},
+{id:"a201",code:"201",name:"Utang Pribadi",group:"Liabilitas",normal:"Kredit"},
+{id:"a301",code:"301",name:"Ekuitas Awal",group:"Ekuitas",normal:"Kredit"},
+{id:"a401",code:"401",name:"Pendapatan Pekerjaan",group:"Pendapatan",normal:"Kredit"},
+{id:"a402",code:"402",name:"Dukungan Orang Tua",group:"Pendapatan",normal:"Kredit"},
+{id:"a501",code:"501",name:"Beban Makan",group:"Beban",normal:"Debit"},
+{id:"a502",code:"502",name:"Beban Kos",group:"Beban",normal:"Debit"}
+];
+
+function loadData(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    if (value !== null) {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error("Gagal membaca data", e);
+  }
+  return fallback.map(x => ({...x}));
+}
+
+let accounts = loadData(ACCOUNT_KEY, defaults);
+let journals = loadData(JOURNAL_KEY, []);
+
+function saveData(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    alert("Data gagal disimpan. Periksa penyimpanan browser.");
+    return false;
+  }
+}
+
+function rupiah(value) {
+  return new Intl.NumberFormat("id-ID", {
+    style:"currency", currency:"IDR", maximumFractionDigits:0
+  }).format(value);
+}
+
+function localDate() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60000)
+    .toISOString().slice(0,10);
+}
+
+function message(id, text, error=false) {
+  const box = document.getElementById(id);
+  box.className = "message " + (error ? "error" : "success");
+  box.textContent = text;
+}
+
+document.querySelectorAll("nav button").forEach(button => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("main section").forEach(s => s.classList.add("hidden"));
+    document.getElementById(button.dataset.page).classList.remove("hidden");
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    button.classList.add("active");
+  });
+});
+
+function renderAccounts() {
+  const rows = document.getElementById("accountRows");
+  rows.replaceChildren();
+
+  accounts.forEach(a => {
+    const tr = document.createElement("tr");
+    [a.code,a.name,a.group,a.normal].forEach(value => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+
+    const td = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.className = "danger";
+    btn.textContent = "Hapus";
+    btn.addEventListener("click", () => {
+      if (journals.some(j => j.lines.some(line => line.accountId === a.id))) {
+        message("accountMessage", "Akun sudah digunakan dalam jurnal. Akun tidak dapat dihapus.", true);
+        return;
+      }
+      if (!confirm("Hapus akun " + a.name + "?")) return;
+      const old = accounts;
+      accounts = accounts.filter(x => x.id !== a.id);
+      if (saveData(ACCOUNT_KEY, accounts)) {
+        renderAccounts();
+        message("accountMessage", "Akun berhasil dihapus.");
+      } else accounts = old;
+    });
+    td.appendChild(btn);
+    tr.appendChild(td);
+    rows.appendChild(tr);
+  });
+
+  if (document.getElementById("ledgerAccount")) {   renderLedgerOptions(); }
+}
+
+document.getElementById("group").addEventListener("change", () => {
+  const normalByGroup = {
+    Aset:"Debit", Liabilitas:"Kredit", Ekuitas:"Kredit",
+    Pendapatan:"Kredit", Beban:"Debit"
+  };
+  document.getElementById("normal").value =
+    normalByGroup[document.getElementById("group").value];
+});
+
+document.getElementById("accountForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const code = document.getElementById("code").value.trim();
+  const name = document.getElementById("name").value.trim();
+  const group = document.getElementById("group").value;
+  const normal = document.getElementById("normal").value;
+  const expected = {
+    Aset:"Debit", Liabilitas:"Kredit", Ekuitas:"Kredit",
+    Pendapatan:"Kredit", Beban:"Debit"
+  };
+
+  if (accounts.some(a => a.code.toLowerCase() === code.toLowerCase())) {
+    message("accountMessage", "Kode akun sudah digunakan.", true);
+    return;
+  }
+  if (normal !== expected[group]) {
+    message("accountMessage", "Saldo normal tidak sesuai kelompok akun.", true);
+    return;
+  }
+
+  const old = accounts;
+  accounts = [...accounts, {
+    id:"acc-" + Date.now() + "-" + Math.random().toString(16).slice(2),
+    code,name,group,normal
+  }];
+
+  if (saveData(ACCOUNT_KEY, accounts)) {
+    renderAccounts();
+    e.target.reset();
+    document.getElementById("normal").value = "Debit";
+    message("accountMessage", "Akun berhasil disimpan.");
+    refreshAccountOptions();
+  } else accounts = old;
+});
+
+function refreshAccountOptions() {
+  document.querySelectorAll(".account-select").forEach(select => {
+    const current = select.value;
+    select.replaceChildren();
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = "-- Pilih akun --";
+    select.appendChild(first);
+
+    accounts.forEach(a => {
+      const option = document.createElement("option");
+      option.value = a.id;
+      option.textContent = a.code + " - " + a.name;
+      select.appendChild(option);
+    });
+    select.value = current;
+  });
+}
+
+
+
+function formatAngka(input) {
+  const angka = input.value.replace(/\D/g, "");
+
+  input.value = angka
+    ? angka.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    : "";
+}
+
+function bacaAngka(input) {
+  return Number(input.value.replace(/\D/g, "")) || 0;
+}
+
+
+function addJournalLine() {
+  const container = document.getElementById("journalLines");
+  const line = document.createElement("div");
+  line.className = "line";
+
+  const title = document.createElement("div");
+  title.className = "line-title";
+  const heading = document.createElement("strong");
+  heading.textContent = "Baris akun";
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "danger";
+  remove.textContent = "Hapus baris";
+  remove.addEventListener("click", () => {
+    line.remove();
+    renumberLines();
+    updateTotals();
+  });
+  title.append(heading, remove);
+  line.appendChild(title);
+
+  const grid = document.createElement("div");
+  grid.className = "line-grid";
+
+  const accountWrap = document.createElement("div");
+  const accountLabel = document.createElement("label");
+  accountLabel.textContent = "Akun";
+  const select = document.createElement("select");
+  select.className = "account-select";
+  select.required = true;
+  accountLabel.appendChild(select);
+  accountWrap.appendChild(accountLabel);
+
+  const debitWrap = document.createElement("div");
+  const debitLabel = document.createElement("label");
+  debitLabel.textContent = "Debit (ribuan Rp)";
+  const debit = document.createElement("input");
+  debit.type = "number";
+  debit.inputMode = "numeric";
+  debit.min = "0";
+  debit.step = "1";
+  debit.placeholder = "0";
+  debit.className = "debit-input";
+  debitLabel.appendChild(debit);
+  debitWrap.appendChild(debitLabel);
+
+  const creditWrap = document.createElement("div");
+  const creditLabel = document.createElement("label");
+  creditLabel.textContent = "Kredit (ribuan Rp)";
+  const credit = document.createElement("input");
+  credit.type = "text"; credit.inputMode = "numeric";
+  credit.min = "0";
+  credit.step = "1";
+  credit.placeholder = "0";
+  credit.className = "credit-input";
+  creditLabel.appendChild(credit);
+  creditWrap.appendChild(creditLabel);
+
+  
+debit.addEventListener("focus", () => {
+  debit.value = debit.value.replace(/\./g, "");
+});
+
+debit.addEventListener("input", () => {
+  if (bacaAngka(debit) > 0) credit.value = "";
+  updateTotals();
+});
+
+debit.addEventListener("blur", () => {
+  formatAngka(debit);
+});
+
+credit.addEventListener("focus", () => {
+  credit.value = credit.value.replace(/\./g, "");
+});
+
+credit.addEventListener("input", () => {
+  if (bacaAngka(credit) > 0) debit.value = "";
+  updateTotals();
+});
+
+credit.addEventListener("blur", () => {
+  formatAngka(credit);
+});
+
+  grid.append(accountWrap, debitWrap, creditWrap);
+  line.appendChild(grid);
+  container.appendChild(line);
+  refreshAccountOptions();
+  renumberLines();
+}
+
+function renumberLines() {
+  document.querySelectorAll("#journalLines .line").forEach((line,i) => {
+    line.querySelector("strong").textContent = "Baris akun " + (i+1);
+  });
+}
+
+function getTotals() {
+  let debit = 0;
+  let credit = 0;
+
+  document.querySelectorAll(".debit-input").forEach(input => {
+    debit += bacaAngka(input);
+  });
+
+  document.querySelectorAll(".credit-input").forEach(input => {
+    credit += bacaAngka(input);
+  });
+
+  return { debit, credit };
+}
+
+function updateTotals() {
+  const t = getTotals();
+  document.getElementById("totalDebit").textContent = rupiah(t.debit);
+  document.getElementById("totalCredit").textContent = rupiah(t.credit);
+  const status = document.getElementById("balanceStatus");
+  if (t.debit === t.credit && t.debit > 0) {
+    status.textContent = "✓ Seimbang";
+    status.style.color = "#166534";
+  } else {
+    status.textContent = "Belum seimbang";
+    status.style.color = "#991b1b";
+  }
+}
+
+document.getElementById("addLine").addEventListener("click", addJournalLine);
+
+document.getElementById("journalForm").addEventListener("submit", e => {
+  e.preventDefault();
+
+  const date = document.getElementById("jDate").value;
+  const ref = document.getElementById("jRef").value.trim();
+  const desc = document.getElementById("jDesc").value.trim();
+  const lineElements = [...document.querySelectorAll("#journalLines .line")];
+  const lines = [];
+
+  if (lineElements.length < 2) {
+    message("journalMessage", "Jurnal harus memiliki minimal dua baris akun.", true);
+    return;
+  }
+
+  for (const element of lineElements) {
+    const accountId = element.querySelector(".account-select").value;
+    const debitInput = element.querySelector(".debit-input");
+    const creditInput = element.querySelector(".credit-input");
+    const debit = bacaAngka(debitInput);
+const credit = bacaAngka(creditInput);
+
+    if (!accountId) {
+      message("journalMessage", "Pilih akun untuk setiap baris.", true);
+      return;
+    }
+    if (debit < 0 || credit < 0 || (debit > 0 && credit > 0) ||
+        (debit === 0 && credit === 0)) {
+      message("journalMessage", "Setiap baris harus berisi debit atau kredit positif, bukan keduanya.", true);
+      return;
+    }
+
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) {
+      message("journalMessage", "Akun tidak ditemukan. Periksa daftar akun.", true);
+      return;
+    }
+    lines.push({accountId,code:account.code,name:account.name,debit,credit});
+  }
+
+  const totalDebit = lines.reduce((sum,line) => sum + line.debit, 0);
+  const totalCredit = lines.reduce((sum,line) => sum + line.credit, 0);
+
+  if (totalDebit <= 0 || totalDebit !== totalCredit) {
+    message("journalMessage", "Jurnal belum seimbang. Total debit harus sama dengan total kredit dan lebih dari nol.", true);
+    return;
+  }
+
+  const entry = {
+    id:"j-" + Date.now() + "-" + Math.random().toString(16).slice(2),
+    date,ref,desc,lines,totalDebit,totalCredit
+  };
+
+  const old = journals;
+  journals = [entry,...journals];
+  if (saveData(JOURNAL_KEY, journals)) {
+    renderJournals();
+    e.target.reset();
+    document.getElementById("jDate").value = localDate();
+    document.getElementById("journalLines").replaceChildren();
+    addJournalLine();
+    addJournalLine();
+    updateTotals();
+    message("journalMessage", "Jurnal berhasil disimpan.");
+  } else journals = old;
+});
+
+function renderJournals() {
+  const rows = document.getElementById("journalRows");
+  rows.replaceChildren();
+
+  journals.forEach(j => {
+    const tr = document.createElement("tr");
+
+    const dateCell = document.createElement("td");
+    dateCell.textContent = j.date + (j.ref ? "\n" + j.ref : "");
+    dateCell.style.whiteSpace = "pre-line";
+
+    const descCell = document.createElement("td");
+    descCell.textContent = j.desc;
+
+    const linesCell = document.createElement("td");
+    j.lines.forEach((line,index) => {
+      const p = document.createElement("div");
+      p.textContent = line.code + " " + line.name + " — " +
+        (line.debit > 0 ? "D " + rupiah(line.debit) : "K " + rupiah(line.credit));
+      linesCell.appendChild(p);
+    });
+
+    const totalCell = document.createElement("td");
+    totalCell.className = "num";
+    totalCell.textContent = rupiah(j.totalDebit);
+
+    const actionCell = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.className = "danger";
+    btn.textContent = "Hapus";
+    btn.addEventListener("click", () => {
+      if (!confirm("Hapus jurnal " + (j.ref || j.date) + "?")) return;
+      const old = journals;
+      journals = journals.filter(x => x.id !== j.id);
+      if (saveData(JOURNAL_KEY, journals)) {
+        renderJournals();
+        message("journalMessage", "Jurnal berhasil dihapus.");
+      } else journals = old;
+    });
+    actionCell.appendChild(btn);
+
+    tr.append(dateCell,descCell,linesCell,totalCell,actionCell);
+    rows.appendChild(tr);
+  });
+
+  document.getElementById("journalCount").textContent = journals.length;
+  const sum = journals.reduce((total,j) => total + j.totalDebit,0);
+  document.getElementById("debitSummary").textContent = rupiah(sum);
+}
+
+document.getElementById("jDate").value = localDate();
+renderAccounts();
+renderJournals();
+renderLedgerOptions();
+renderTrialBalance(); 
+renderIncomeStatement();
+renderBalanceSheet();
+  
+function renderLedgerOptions() {
+  const select = document.getElementById("ledgerAccount");
+  const previous = select.value;
+
+  select.replaceChildren();
+
+  accounts.forEach(account => {
+    const option = document.createElement("option");
+    option.value = account.id;
+    option.textContent = account.code + " - " + account.name;
+    select.appendChild(option);
+  });
+
+  if (accounts.some(a => a.id === previous)) {
+    select.value = previous;
+  }
+
+  renderLedger();
+}
+
+function renderLedger() {
+  const select = document.getElementById("ledgerAccount");
+  const rows = document.getElementById("ledgerRows");
+  const empty = document.getElementById("ledgerEmpty");
+
+  if (!select || !rows || !empty) return;
+
+  rows.replaceChildren();
+
+  const account = accounts.find(a => a.id === select.value);
+
+  if (!account) {
+    empty.textContent = "Belum ada akun untuk ditampilkan.";
+    empty.style.display = "block";
+    return;
+  }
+
+  let saldo = 0;
+  let count = 0;
+
+  const entries = [];
+
+  journals.forEach(journal => {
+    journal.lines.forEach(line => {
+      if (line.accountId === account.id) {
+        entries.push({ journal, line });
+      }
+    });
+  });
+
+  entries.sort((a, b) =>
+    a.journal.date.localeCompare(b.journal.date)
+  );
+
+  entries.forEach(({ journal, line }) => {
+    saldo += account.normal === "Debit"
+      ? line.debit - line.credit
+      : line.credit - line.debit;
+
+    const tr = document.createElement("tr");
+
+    const values = [
+      journal.date,
+      journal.ref || "-",
+      journal.desc,
+      rupiah(line.debit),
+      rupiah(line.credit),
+      (saldo < 0 ? "-" : "") + rupiah(Math.abs(saldo))
+    ];
+
+    values.forEach((value, index) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+
+      if (index >= 3) td.className = "num";
+
+      tr.appendChild(td);
+    });
+
+    rows.appendChild(tr);
+    count++;
+  });
+
+  empty.textContent = count
+    ? "Saldo dihitung berdasarkan saldo normal akun."
+    : "Belum ada transaksi untuk akun ini.";
+
+  empty.style.display = "block";
+}
+
+document.getElementById("ledgerAccount")
+  .addEventListener("change", renderLedger);
+
+
+function renderTrialBalance() {
+  const rows = document.getElementById("trialBalanceRows");
+  if (!rows) return;
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  rows.innerHTML = "";
+
+  accounts.forEach(account => {
+    let debit = 0;
+    let credit = 0;
+
+    journals.forEach(journal => {
+      journal.lines.forEach(line => {
+        if (String(line.accountId) === String(account.id)) {
+          debit += Number(line.debit) || 0;
+          credit += Number(line.credit) || 0;
+        }
+      });
+    });
+
+    const saldo = debit - credit;
+    const saldoDebit = Math.max(saldo, 0);
+    const saldoCredit = Math.max(-saldo, 0);
+
+    totalDebit += saldoDebit;
+    totalCredit += saldoCredit;
+
+    rows.innerHTML += `
+      <tr>
+        <td>${account.code}</td>
+        <td>${account.name}</td>
+        <td>${saldoDebit ? rupiah(saldoDebit) : "—"}</td>
+        <td>${saldoCredit ? rupiah(saldoCredit) : "—"}</td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("trialBalanceDebit").textContent =
+    rupiah(totalDebit);
+
+  document.getElementById("trialBalanceCredit").textContent =
+    rupiah(totalCredit);
+
+  document.getElementById("trialBalanceStatus").textContent =
+    totalDebit === totalCredit
+      ? "Total debit dan kredit seimbang."
+      : "Perhatian: total debit dan kredit belum seimbang.";
+}
+
+
+function renderIncomeStatement() {
+  const revenueRows = document.getElementById("incomeRevenueRows");
+  const expenseRows = document.getElementById("incomeExpenseRows");
+
+  if (!revenueRows || !expenseRows) return;
+
+  let totalRevenue = 0;
+  let totalExpense = 0;
+
+  revenueRows.innerHTML = "";
+  expenseRows.innerHTML = "";
+
+  accounts.forEach(account => {
+    const group = String(account.group || "").toLowerCase();
+
+    let debit = 0;
+    let credit = 0;
+
+    journals.forEach(journal => {
+      journal.lines.forEach(line => {
+        if (String(line.accountId) === String(account.id)) {
+          debit += Number(line.debit) || 0;
+          credit += Number(line.credit) || 0;
+        }
+      });
+    });
+
+    if (group.includes("pendapatan")) {
+      const balance = credit - debit;
+
+      if (balance !== 0) {
+        revenueRows.innerHTML += `
+          <tr>
+            <td>${account.name}</td>
+            <td>${rupiah(balance)}</td>
+          </tr>
+        `;
+      }
+
+      totalRevenue += balance;
+    }
+
+    if (group.includes("beban")) {
+      const balance = debit - credit;
+
+      if (balance !== 0) {
+        expenseRows.innerHTML += `
+          <tr>
+            <td>${account.name}</td>
+            <td>${rupiah(balance)}</td>
+          </tr>
+        `;
+      }
+
+      totalExpense += balance;
+    }
+  });
+
+  const netResult = totalRevenue - totalExpense;
+
+  document.getElementById("incomeRevenueTotal").textContent =
+    rupiah(totalRevenue);
+
+  document.getElementById("incomeExpenseTotal").textContent =
+    rupiah(totalExpense);
+
+  document.getElementById("incomeSummaryRevenue").textContent =
+    rupiah(totalRevenue);
+
+  document.getElementById("incomeSummaryExpense").textContent =
+    rupiah(totalExpense);
+
+  document.getElementById("incomeResultLabel").textContent =
+    netResult >= 0 ? "Laba Bersih" : "Rugi Bersih";
+
+  document.getElementById("incomeNetResult").textContent =
+    rupiah(Math.abs(netResult));
+}
+
+
+function renderBalanceSheet() {
+  const assetRows = document.getElementById("bsAssetRows");
+  const liabilityRows = document.getElementById("bsLiabilityRows");
+  const equityRows = document.getElementById("bsEquityRows");
+
+  if (!assetRows || !liabilityRows || !equityRows) return;
+
+  let totalAsset = 0;
+  let totalLiability = 0;
+  let totalEquity = 0;
+
+  assetRows.innerHTML = "";
+  liabilityRows.innerHTML = "";
+  equityRows.innerHTML = "";
+
+  accounts.forEach(account => {
+    const group = String(account.group || "").toLowerCase();
+
+    let debit = 0;
+    let credit = 0;
+
+    journals.forEach(journal => {
+      journal.lines.forEach(line => {
+        if (String(line.accountId) === String(account.id)) {
+          debit += Number(line.debit) || 0;
+          credit += Number(line.credit) || 0;
+        }
+      });
+    });
+
+    const isAsset = group.includes("aset") ||
+                    group.includes("aktiva");
+
+    const isLiability = group.includes("liabilitas") ||
+                        group.includes("kewajiban") ||
+                        group.includes("utang");
+
+    const isEquity = group.includes("ekuitas") ||
+                     group.includes("modal");
+
+    let balance = 0;
+    let targetRows = null;
+
+    if (isAsset) {
+      balance = debit - credit;
+      targetRows = assetRows;
+      totalAsset += balance;
+    } else if (isLiability) {
+      balance = credit - debit;
+      targetRows = liabilityRows;
+      totalLiability += balance;
+    } else if (isEquity) {
+      balance = credit - debit;
+      targetRows = equityRows;
+      totalEquity += balance;
+    }
+
+    if (targetRows && balance !== 0) {
+      targetRows.innerHTML += `
+        <tr>
+          <td>${account.name}</td>
+          <td>${rupiah(balance)}</td>
+        </tr>
+      `;
+    }
+  });
+
+  // Tambahkan laba/rugi periode berjalan ke ekuitas.
+  let revenue = 0;
+  let expense = 0;
+
+  accounts.forEach(account => {
+    const group = String(account.group || "").toLowerCase();
+    let debit = 0;
+    let credit = 0;
+
+    journals.forEach(journal => {
+      journal.lines.forEach(line => {
+        if (String(line.accountId) === String(account.id)) {
+          debit += Number(line.debit) || 0;
+          credit += Number(line.credit) || 0;
+        }
+      });
+    });
+
+    if (group.includes("pendapatan")) {
+      revenue += credit - debit;
+    }
+
+    if (group.includes("beban")) {
+      expense += debit - credit;
+    }
+  });
+
+  const netIncome = revenue - expense;
+  totalEquity += netIncome;
+
+  if (netIncome !== 0) {
+    equityRows.innerHTML += `
+      <tr>
+        <td>Laba/Rugi Periode Berjalan</td>
+        <td>${rupiah(netIncome)}</td>
+      </tr>
+    `;
+  }
+
+  const liabilityEquity = totalLiability + totalEquity;
+
+  document.getElementById("bsAssetTotal").textContent =
+    rupiah(totalAsset);
+  document.getElementById("bsLiabilityTotal").textContent =
+    rupiah(totalLiability);
+  document.getElementById("bsEquityTotal").textContent =
+    rupiah(totalEquity);
+
+  document.getElementById("bsSummaryAsset").textContent =
+    rupiah(totalAsset);
+  document.getElementById("bsSummaryLiability").textContent =
+    rupiah(totalLiability);
+  document.getElementById("bsSummaryEquity").textContent =
+    rupiah(totalEquity);
+  document.getElementById("bsLiabilityEquity").textContent =
+    rupiah(liabilityEquity);
+
+  const difference = totalAsset - liabilityEquity;
+
+  document.getElementById("bsStatus").textContent =
+    Math.abs(difference) < 0.01
+      ? "Seimbang"
+      : "Selisih: " + rupiah(difference);
+}
+
+  
+addJournalLine();
+addJournalLine();
+updateTotals();
+
+  
+</script>
+</body>
+</html>
