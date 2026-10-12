@@ -58,6 +58,7 @@ footer{text-align:center;color:#687386;padding:20px;font-size:12px}
 <button data-page="trialbalance">Neraca Saldo</button>
 <button data-page="income">Laba Rugi</button>
 <button data-page="balanceSheet">Neraca</button>
+<button data-page="backup">Backup Data</button>
 </nav>
 
 <main>
@@ -325,6 +326,26 @@ footer{text-align:center;color:#687386;padding:20px;font-size:12px}
 <h3>Laporan Belum Aktif</h3>
 <p class="muted">Setelah jurnal umum selesai diuji, tahap selanjutnya adalah Buku Besar, Neraca Saldo, Laporan Laba Rugi, dan Neraca berdasarkan transaksi yang tersimpan.</p>
 </div>
+</section>
+<section id="backup" class="hidden">
+  <h2>Backup & Pemulihan Data</h2>
+  <p class="muted">Simpan salinan COA dan jurnal dari perangkat ini. Data laptop dan HP terpisah, jadi lakukan ekspor di masing-masing perangkat.</p>
+  <div class="panel">
+    <h3>1. Ekspor Backup</h3>
+    <p class="muted">File JSON berisi daftar akun dan seluruh jurnal yang tersimpan di perangkat ini. Simpan file di tempat aman dan jangan diedit manual.</p>
+    <div id="backupSummary" class="totals">Memuat ringkasan data...</div>
+    <button type="button" class="primary" id="exportBackup">Unduh Backup JSON</button>
+  </div>
+  <div class="panel">
+    <h3>2. Pulihkan dari File Backup</h3>
+    <p class="muted">Fitur ini mengganti COA dan jurnal di perangkat ini dengan isi file backup yang dipilih. Gunakan hanya setelah kamu punya backup terbaru perangkat ini sendiri. Untuk menggabungkan laptop dan HP, ekspor keduanya dahulu lalu gabungkan file-nya sebelum memulihkan.</p>
+    <label for="backupFile">Pilih file backup JSON</label>
+    <input id="backupFile" type="file" accept=".json,application/json">
+    <div id="restorePreview" class="muted" style="margin-top:12px">Belum ada file dipilih.</div>
+    <button type="button" class="danger" id="restoreBackup" disabled style="margin-top:12px">Pulihkan dan Ganti Data Perangkat Ini</button>
+    <p class="muted">Pemulihan tidak dapat dibatalkan dari aplikasi. Pastikan file yang dipilih benar dan backup data saat ini sudah disimpan.</p>
+  </div>
+  <div id="backupMessage"></div>
 </section>
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
@@ -1131,6 +1152,126 @@ addJournalLine();
 updateTotals();
 
   
+
+// Backup & pemulihan data lokal
+let pendingBackupImport = null;
+
+function updateBackupSummary() {
+  const box = document.getElementById("backupSummary");
+  if (box) box.textContent = "Data perangkat ini: " + accounts.length +
+    " akun dan " + journals.length + " transaksi jurnal.";
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("exportBackup").addEventListener("click", () => {
+  const backup = {
+    app: "SiklusKu",
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    source: "local-device",
+    accounts,
+    journals
+  };
+  downloadJson("siklusku-backup-" + localDate() + ".json", backup);
+  message("backupMessage", "Backup berhasil disiapkan. Pastikan file JSON masuk ke folder Unduhan.");
+});
+
+document.getElementById("backupFile").addEventListener("change", async event => {
+  pendingBackupImport = null;
+  const restoreButton = document.getElementById("restoreBackup");
+  const preview = document.getElementById("restorePreview");
+  restoreButton.disabled = true;
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    preview.textContent = "Belum ada file dipilih.";
+    return;
+  }
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (!parsed || parsed.app !== "SiklusKu" || parsed.formatVersion !== 1 ||
+        !Array.isArray(parsed.accounts) || !Array.isArray(parsed.journals)) {
+      throw new Error("Format file tidak dikenali sebagai backup SiklusKu.");
+    }
+    const accountIds = new Set();
+    const accountCodes = new Set();
+    for (const a of parsed.accounts) {
+      if (!a || a.id == null || !String(a.code || "").trim() ||
+          !String(a.name || "").trim() || !String(a.group || "").trim() ||
+          !["Debit","Kredit"].includes(a.normal)) {
+        throw new Error("Ada data akun yang tidak lengkap.");
+      }
+      if (accountIds.has(String(a.id))) throw new Error("Ada ID akun duplikat dalam file.");
+      if (accountCodes.has(String(a.code).toLowerCase())) throw new Error("Ada kode akun duplikat dalam file.");
+      accountIds.add(String(a.id));
+      accountCodes.add(String(a.code).toLowerCase());
+    }
+    for (const j of parsed.journals) {
+      if (!j || j.id == null || !Array.isArray(j.lines) || !j.date || !j.desc) {
+        throw new Error("Ada data jurnal yang tidak lengkap.");
+      }
+      for (const line of j.lines) {
+        if (!line || !accountIds.has(String(line.accountId)) ||
+            !Number.isFinite(Number(line.debit)) || !Number.isFinite(Number(line.credit))) {
+          throw new Error("Ada baris jurnal yang tidak cocok dengan akun di file backup.");
+        }
+      }
+    }
+    pendingBackupImport = parsed;
+    preview.textContent = "File valid: " + parsed.accounts.length + " akun dan " +
+      parsed.journals.length + " transaksi jurnal. Waktu ekspor: " +
+      (parsed.exportedAt || "tidak tercantum") + ". Memulihkan akan mengganti data perangkat ini.";
+    restoreButton.disabled = false;
+  } catch (error) {
+    preview.textContent = "File tidak dapat digunakan: " + error.message;
+  }
+});
+
+document.getElementById("restoreBackup").addEventListener("click", () => {
+  if (!pendingBackupImport) return;
+  const ok = confirm("PERINGATAN: tindakan ini akan MENGGANTI seluruh COA dan jurnal pada perangkat ini dengan data dari file backup. Sudah ekspor backup perangkat ini terlebih dahulu dan yakin ingin lanjut?");
+  if (!ok) return;
+
+  const oldAccounts = accounts;
+  const oldJournals = journals;
+  const nextAccounts = pendingBackupImport.accounts;
+  const nextJournals = pendingBackupImport.journals;
+
+  if (!saveData(ACCOUNT_KEY, nextAccounts)) return;
+  if (!saveData(JOURNAL_KEY, nextJournals)) {
+    saveData(ACCOUNT_KEY, oldAccounts);
+    saveData(JOURNAL_KEY, oldJournals);
+    return;
+  }
+
+  accounts = nextAccounts;
+  journals = nextJournals;
+  renderAccounts();
+  renderJournals();
+  renderLedgerOptions();
+  renderTrialBalance();
+  renderIncomeStatement();
+  renderBalanceSheet();
+  updateBackupSummary();
+  message("backupMessage", "Pemulihan selesai. COA dan jurnal perangkat ini sudah diganti sesuai file backup.");
+  document.getElementById("backupFile").value = "";
+  document.getElementById("restorePreview").textContent = "Pemulihan selesai.";
+  document.getElementById("restoreBackup").disabled = true;
+  pendingBackupImport = null;
+});
+
+updateBackupSummary();
+
 </script>
 </body>
 </html>
