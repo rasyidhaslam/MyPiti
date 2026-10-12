@@ -965,71 +965,98 @@ function exportReportsExcel() {
     status.className = "message error";
     return;
   }
-  // Pastikan laporan terbaru sebelum diekspor.
-  renderTrialBalance();
-  renderIncomeStatement();
-  renderBalanceSheet();
-  const wb = XLSX.utils.book_new();
-  const addTableSheet = (name, title, tableIds) => {
-    const rows = [[title], ["Diekspor pada", new Date().toLocaleString("id-ID")], []];
-    tableIds.forEach(({id, label}) => {
-      rows.push([label]);
-      const table = document.getElementById(id);
-      if (table) {
-        [...table.querySelectorAll("tr")].forEach(tr => {
-          rows.push([...tr.querySelectorAll("th,td")].map(cell => cell.innerText.trim()));
-        });
+
+  // Hitung langsung dari data akun dan jurnal agar nilai Excel berupa angka,
+  // bukan teks rupiah hasil tampilan HTML.
+  const balances = accounts.map(account => {
+    let debit = 0, credit = 0;
+    journals.forEach(journal => journal.lines.forEach(line => {
+      if (String(line.accountId) === String(account.id)) {
+        debit += Number(line.debit) || 0;
+        credit += Number(line.credit) || 0;
       }
-      rows.push([]);
-    });
+    }));
+    return { account, debit, credit, net: debit - credit };
+  });
+
+  const rupiahFmt = '#,##0;[Red](#,##0);-';
+  const wb = XLSX.utils.book_new();
+  const addSheet = (name, rows, widths, numericCols=[]) => {
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{wch:32},{wch:24},{wch:20},{wch:20}];
+    ws['!cols'] = widths.map(w => ({wch:w}));
+    numericCols.forEach(col => {
+      for (let r = 0; r < (ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).e.r + 1 : 0); r++) {
+        const cell = ws[XLSX.utils.encode_cell({r, c:col})];
+        if (cell && typeof cell.v === 'number') cell.z = rupiahFmt;
+      }
+    });
     XLSX.utils.book_append_sheet(wb, ws, name);
   };
-  addTableSheet("Neraca Saldo", "NERACA SALDO", [{id:"trialBalanceRows",label:"Rincian Saldo Akun"}]);
-  // Tambahkan header dan total neraca saldo yang berada di luar tbody.
-  const tb = wb.Sheets["Neraca Saldo"];
-  XLSX.utils.sheet_add_aoa(tb, [["Kode","Nama Akun","Debit","Kredit"]], {origin:"A4"});
-  const tbRows = [...document.querySelectorAll("#trialBalanceRows tr")].map(tr => [...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(tb, tbRows, {origin:"A5"});
-  XLSX.utils.sheet_add_aoa(tb, [["TOTAL","",document.getElementById("trialBalanceDebit").innerText,document.getElementById("trialBalanceCredit").innerText],[document.getElementById("trialBalanceStatus").innerText]], {origin:`A${5+tbRows.length}`});
-  addTableSheet("Laba Rugi", "LAPORAN LABA RUGI", [
-    {id:"incomeRevenueRows",label:"Pendapatan"}, {id:"incomeExpenseRows",label:"Beban"}
-  ]);
-  const lr = wb.Sheets["Laba Rugi"];
-  XLSX.utils.sheet_add_aoa(lr, [["Pendapatan","Jumlah"]], {origin:"A4"});
-  let row = 5;
-  const revenueRows = [...document.querySelectorAll("#incomeRevenueRows tr")].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(lr, revenueRows, {origin:`A${row}`}); row += revenueRows.length;
-  XLSX.utils.sheet_add_aoa(lr, [["Total Pendapatan",document.getElementById("incomeRevenueTotal").innerText],[],["Beban","Jumlah"]], {origin:`A${row}`}); row += 4;
-  const expenseRows = [...document.querySelectorAll("#incomeExpenseRows tr")].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(lr, expenseRows, {origin:`A${row}`}); row += expenseRows.length;
-  XLSX.utils.sheet_add_aoa(lr, [["Total Beban",document.getElementById("incomeExpenseTotal").innerText],[],[document.getElementById("incomeResultLabel").innerText,document.getElementById("incomeNetResult").innerText]], {origin:`A${row}`});
-  addTableSheet("Posisi Keuangan", "LAPORAN POSISI KEUANGAN", [
-    {id:"bsAssetRows",label:"Aset"},{id:"bsLiabilityRows",label:"Liabilitas"},{id:"bsEquityRows",label:"Ekuitas"}
-  ]);
-  const pk = wb.Sheets["Posisi Keuangan"];
-  let pr = 4;
-  for (const [label,bodyId,totalId] of [["ASET","bsAssetRows","bsAssetTotal"],["LIABILITAS","bsLiabilityRows","bsLiabilityTotal"],["EKUITAS","bsEquityRows","bsEquityTotal"]]) {
-    XLSX.utils.sheet_add_aoa(pk, [[label,"Saldo"]], {origin:`A${pr}`}); pr++;
-    const vals = [...document.querySelectorAll(`#${bodyId} tr`)].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-    XLSX.utils.sheet_add_aoa(pk, vals, {origin:`A${pr}`}); pr += vals.length;
-    XLSX.utils.sheet_add_aoa(pk, [["Total "+label,document.getElementById(totalId).innerText],[]], {origin:`A${pr}`}); pr += 3;
-  }
-  XLSX.utils.sheet_add_aoa(pk, [["Ringkasan","Jumlah"],["Total Aset",document.getElementById("bsSummaryAsset").innerText],["Total Liabilitas",document.getElementById("bsSummaryLiability").innerText],["Total Ekuitas",document.getElementById("bsSummaryEquity").innerText],["Liabilitas + Ekuitas",document.getElementById("bsLiabilityEquity").innerText],["Status Neraca",document.getElementById("bsStatus").innerText]], {origin:`A${pr}`});
-  addTableSheet("Daftar Akun", "DAFTAR AKUN (COA)", [{id:"accountRows",label:"Daftar Akun"}]);
-  const coa = wb.Sheets["Daftar Akun"];
-  XLSX.utils.sheet_add_aoa(coa, [["Kode Akun","Nama Akun","Kelompok","Saldo Normal"]], {origin:"A4"});
-  const accountRows = accounts.map(a=>[a.code,a.name,a.group,a.normal]);
-  XLSX.utils.sheet_add_aoa(coa, accountRows, {origin:"A5"});
-  const journalRows = [["Tanggal","Referensi","Keterangan","Kode Akun","Nama Akun","Debit","Kredit"]];
-  journals.slice().reverse().forEach(j => j.lines.forEach(line => journalRows.push([j.date,j.ref||"",j.desc,line.code,line.name,Number(line.debit)||0,Number(line.credit)||0])));
-  const js = XLSX.utils.aoa_to_sheet([["JURNAL UMUM"],["Diekspor pada",new Date().toLocaleString("id-ID")],[],...journalRows]);
-  js["!cols"] = [{wch:14},{wch:16},{wch:32},{wch:14},{wch:24},{wch:18},{wch:18}];
-  XLSX.utils.book_append_sheet(wb, js, "Jurnal Umum");
-  XLSX.writeFile(wb, "SiklusKu-Laporan-" + localDate() + ".xlsx");
-  status.textContent = "File Excel berhasil dibuat. Periksa folder Unduhan.";
-  status.className = "message success";
+  const timestamp = new Date().toLocaleString('id-ID');
+
+  // Neraca saldo: saldo akhir bersih tiap akun ditampilkan di sisi debit/kredit.
+  let totalDebit = 0, totalCredit = 0;
+  const tbRows = [['NERACA SALDO'], ['Diekspor pada', timestamp], [], ['Kode Akun','Nama Akun','Kelompok','Debit','Kredit']];
+  balances.forEach(({account, net}) => {
+    const d = Math.max(net, 0), k = Math.max(-net, 0);
+    totalDebit += d; totalCredit += k;
+    tbRows.push([account.code, account.name, account.group, d, k]);
+  });
+  tbRows.push(['','TOTAL','',totalDebit,totalCredit]);
+  tbRows.push(['Status', totalDebit === totalCredit ? 'Seimbang' : 'Tidak seimbang']);
+  addSheet('Neraca Saldo', tbRows, [16,30,18,18,18], [3,4]);
+
+  // Laba rugi
+  const revenueRows = [], expenseRows = [];
+  let totalRevenue = 0, totalExpense = 0;
+  balances.forEach(({account, debit, credit}) => {
+    const group = String(account.group || '').toLowerCase();
+    if (group.includes('pendapatan')) {
+      const amount = credit - debit;
+      if (amount !== 0) revenueRows.push([account.code, account.name, amount]);
+      totalRevenue += amount;
+    }
+    if (group.includes('beban')) {
+      const amount = debit - credit;
+      if (amount !== 0) expenseRows.push([account.code, account.name, amount]);
+      totalExpense += amount;
+    }
+  });
+  const netIncome = totalRevenue - totalExpense;
+  const incomeRows = [['LAPORAN LABA RUGI'], ['Diekspor pada', timestamp], [], ['PENDAPATAN'], ['Kode Akun','Nama Akun','Jumlah'], ...revenueRows, ['','Total Pendapatan',totalRevenue], [], ['BEBAN'], ['Kode Akun','Nama Akun','Jumlah'], ...expenseRows, ['','Total Beban',totalExpense], [], [netIncome >= 0 ? 'LABA BERSIH' : 'RUGI BERSIH', Math.abs(netIncome)]];
+  addSheet('Laba Rugi', incomeRows, [18,32,20], [2]);
+
+  // Posisi keuangan
+  const assetRows = [], liabilityRows = [], equityRows = [];
+  let totalAsset = 0, totalLiability = 0, totalEquity = 0;
+  balances.forEach(({account, debit, credit}) => {
+    const group = String(account.group || '').toLowerCase();
+    if (group.includes('aset') || group.includes('aktiva')) {
+      const amount = debit - credit; if (amount !== 0) assetRows.push([account.code, account.name, amount]); totalAsset += amount;
+    } else if (group.includes('liabilitas') || group.includes('kewajiban') || group.includes('utang')) {
+      const amount = credit - debit; if (amount !== 0) liabilityRows.push([account.code, account.name, amount]); totalLiability += amount;
+    } else if (group.includes('ekuitas') || group.includes('modal')) {
+      const amount = credit - debit; if (amount !== 0) equityRows.push([account.code, account.name, amount]); totalEquity += amount;
+    }
+  });
+  totalEquity += netIncome;
+  if (netIncome !== 0) equityRows.push(['','Laba/Rugi Periode Berjalan',netIncome]);
+  const bsRows = [['LAPORAN POSISI KEUANGAN'], ['Diekspor pada', timestamp], [], ['ASET'], ['Kode Akun','Nama Akun','Saldo'], ...assetRows, ['','Total Aset',totalAsset], [], ['LIABILITAS'], ['Kode Akun','Nama Akun','Saldo'], ...liabilityRows, ['','Total Liabilitas',totalLiability], [], ['EKUITAS'], ['Kode Akun','Nama Akun','Saldo'], ...equityRows, ['','Total Ekuitas',totalEquity], [], ['RINGKASAN'], ['Keterangan','Jumlah'], ['Total Aset',totalAsset], ['Total Liabilitas',totalLiability], ['Total Ekuitas',totalEquity], ['Liabilitas + Ekuitas',totalLiability + totalEquity], ['Selisih Aset - (Liabilitas + Ekuitas)',totalAsset - totalLiability - totalEquity]];
+  addSheet('Posisi Keuangan', bsRows, [34,34,22], [2]);
+
+  const coaRows = [['DAFTAR AKUN (COA)'], ['Diekspor pada', timestamp], [], ['Kode Akun','Nama Akun','Kelompok','Saldo Normal']];
+  accounts.forEach(a => coaRows.push([a.code, a.name, a.group, a.normal]));
+  addSheet('Daftar Akun', coaRows, [18,32,20,18]);
+
+  const journalRows = [['JURNAL UMUM'], ['Diekspor pada', timestamp], [], ['Tanggal','Referensi','Keterangan','Kode Akun','Nama Akun','Debit','Kredit']];
+  journals.slice().reverse().forEach(j => j.lines.forEach(line => journalRows.push([
+    j.date || '', j.ref || '', j.desc || '', line.code || '', line.name || '', Number(line.debit) || 0, Number(line.credit) || 0
+  ])));
+  addSheet('Jurnal Umum', journalRows, [14,18,36,16,28,18,18], [5,6]);
+
+  XLSX.writeFile(wb, 'SiklusKu-Laporan-' + localDate() + '.xlsx');
+  status.textContent = 'File Excel berhasil dibuat. Nilai nominal tersimpan sebagai angka agar bisa dihitung kembali di Excel.';
+  status.className = 'message success';
 }
 
 document.getElementById("exportReportsExcel").addEventListener("click", exportReportsExcel);
