@@ -529,17 +529,7 @@ async function signOutCloud() {
 const ACCOUNT_KEY = "siklusku_accounts_v1";
 const JOURNAL_KEY = "siklusku_journals_v1";
 
-const defaults = [
-{id:"a101",code:"101",name:"Kas",group:"Aset",normal:"Debit"},
-{id:"a102",code:"102",name:"Rekening Bank",group:"Aset",normal:"Debit"},
-{id:"a103",code:"103",name:"E-Wallet",group:"Aset",normal:"Debit"},
-{id:"a201",code:"201",name:"Utang Pribadi",group:"Liabilitas",normal:"Kredit"},
-{id:"a301",code:"301",name:"Ekuitas Awal",group:"Ekuitas",normal:"Kredit"},
-{id:"a401",code:"401",name:"Pendapatan Pekerjaan",group:"Pendapatan",normal:"Kredit"},
-{id:"a402",code:"402",name:"Dukungan Orang Tua",group:"Pendapatan",normal:"Kredit"},
-{id:"a501",code:"501",name:"Beban Makan",group:"Beban",normal:"Debit"},
-{id:"a502",code:"502",name:"Beban Kos",group:"Beban",normal:"Debit"}
-];
+const defaults = [];
 
 function loadData(key, fallback) {
   try {
