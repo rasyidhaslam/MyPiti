@@ -41,6 +41,15 @@ th{color:#687386}
 .totals{background:#eef2f0;padding:13px;border-radius:8px;line-height:1.8}
 footer{text-align:center;color:#687386;padding:20px;font-size:12px}
 @media(min-width:650px){.cards{grid-template-columns:repeat(3,1fr)}.line-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px}}
+
+.auth-wrap{max-width:560px;margin:20px auto;padding:16px}
+.auth-card{background:white;border:1px solid #e3e8ee;border-radius:12px;padding:20px}
+.auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.auth-actions button{margin-top:12px}
+.cloud-status{font-size:12px;padding:8px 10px;border-radius:8px;background:#eef2f0;color:#173b35;margin:10px 16px}
+body:not(.authenticated) nav,body:not(.authenticated) main{display:none}
+body.authenticated #authWrap{display:none}\nbody.authenticated #cloudAccountBar{display:block !important}
+@media(max-width:480px){.auth-actions{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -48,6 +57,27 @@ footer{text-align:center;color:#687386;padding:20px;font-size:12px}
 <h1>SiklusKu</h1>
 <p>Personal Accounting System</p>
 </header>
+
+<section id="authWrap" class="auth-wrap">
+  <div class="auth-card">
+    <h2>Masuk ke SiklusKu Cloud</h2>
+    <p class="muted">Gunakan akun email dan kata sandi yang sama di laptop dan HP agar data tersinkron.</p>
+    <div id="authMessage" aria-live="polite"></div>
+    <form id="authForm">
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" autocomplete="email" required placeholder="nama@email.com">
+      <label for="authPassword">Kata sandi</label>
+      <input id="authPassword" type="password" autocomplete="current-password" minlength="8" required placeholder="Minimal 8 karakter">
+      <div class="auth-actions">
+        <button class="primary" type="submit" id="signInBtn">Masuk</button>
+        <button class="secondary" type="button" id="signUpBtn">Buat Akun Baru</button>
+      </div>
+    </form>
+    <p class="muted">Jika pendaftaran meminta verifikasi email, buka email verifikasi terlebih dahulu. Jangan bagikan kata sandi atau token sesi kepada siapa pun.</p>
+  </div>
+</section>
+<div id="cloudStatus" class="cloud-status" style="display:none">Cloud belum terhubung.</div>
+<div id="cloudAccountBar" style="display:none;text-align:right;padding:0 16px 8px"><button type="button" class="secondary" onclick="signOutCloud()">Keluar dari akun</button></div>
 
 <nav>
 <button class="active" data-page="dashboard">Dashboard</button>
@@ -350,7 +380,151 @@ footer{text-align:center;color:#687386;padding:20px;font-size:12px}
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL = "https://gprvpxsmtjmxfxpdangv.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0A97xGjyxBv1Y-VO84sL3g_483XWU4F";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
+let currentUser = null;
+let cloudSyncTimer = null;
+let applyingCloudData = false;
+let cloudChannel = null;
+
+function setCloudStatus(text, isError=false) {
+  const el = document.getElementById("cloudStatus");
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = "block";
+  el.style.background = isError ? "#fee2e2" : "#eef2f0";
+  el.style.color = isError ? "#991b1b" : "#173b35";
+}
+function authMessage(text, error=false) {
+  const el = document.getElementById("authMessage");
+  el.className = "message " + (error ? "error" : "success");
+  el.textContent = text;
+}
+async function signIn() {
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  await activateCloud(data.user);
+}
+async function signUp() {
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  if (error) throw error;
+  if (data.session && data.user) {
+    await activateCloud(data.user);
+  } else {
+    authMessage("Pendaftaran berhasil. Cek email untuk verifikasi, lalu masuk menggunakan akun yang sama.");
+  }
+}
+document.getElementById("authForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = document.getElementById("signInBtn");
+  btn.disabled = true;
+  try { await signIn(); }
+  catch (err) { authMessage(err.message || "Gagal masuk.", true); }
+  finally { btn.disabled = false; }
+});
+document.getElementById("signUpBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("signUpBtn");
+  if (!document.getElementById("authForm").reportValidity()) return;
+  btn.disabled = true;
+  try { await signUp(); }
+  catch (err) { authMessage(err.message || "Gagal membuat akun.", true); }
+  finally { btn.disabled = false; }
+});
+async function activateCloud(user) {
+  currentUser = user;
+  document.body.classList.add("authenticated");
+  document.getElementById("authWrap").style.display = "none";
+  await loadCloudData();
+  setupRealtimeSync();
+}
+async function loadCloudData() {
+  if (!currentUser) return;
+  setCloudStatus("Menghubungkan dan memeriksa data cloud…");
+  const { data, error } = await supabaseClient
+    .from("siklusku_data")
+    .select("accounts,journals,updated_at")
+    .eq("user_id", currentUser.id)
+    .maybeSingle();
+  if (error) {
+    setCloudStatus("Gagal membaca cloud: " + error.message + ". Periksa SQL tabel dan RLS.", true);
+    return;
+  }
+  if (data) {
+    applyingCloudData = true;
+    accounts = Array.isArray(data.accounts) ? data.accounts : accounts;
+    journals = Array.isArray(data.journals) ? data.journals : journals;
+    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accounts));
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify(journals));
+    applyingCloudData = false;
+    renderAllData();
+    setCloudStatus("Tersinkron ke cloud · pembaruan terakhir " + new Date(data.updated_at).toLocaleString("id-ID"));
+  } else {
+    const { error: saveError } = await supabaseClient.from("siklusku_data").upsert({
+      user_id: currentUser.id, accounts, journals, updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+    if (saveError) {
+      setCloudStatus("Data lokal belum berhasil dikirim: " + saveError.message, true);
+    } else {
+      setCloudStatus("Data perangkat ini sudah disalin ke cloud untuk akun ini.");
+    }
+  }
+}
+function scheduleCloudSync() {
+  if (!currentUser || applyingCloudData) return;
+  clearTimeout(cloudSyncTimer);
+  setCloudStatus("Ada perubahan · menunggu sinkronisasi…");
+  cloudSyncTimer = setTimeout(async () => {
+    try {
+      const { error } = await supabaseClient.from("siklusku_data").upsert({
+        user_id: currentUser.id, accounts, journals, updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+      if (error) throw error;
+      setCloudStatus("Tersinkron ke cloud · " + new Date().toLocaleTimeString("id-ID"));
+    } catch (err) {
+      setCloudStatus("Sinkronisasi gagal: " + (err.message || "periksa koneksi dan konfigurasi database"), true);
+    }
+  }, 700);
+}
+function setupRealtimeSync() {
+  if (!currentUser) return;
+  if (cloudChannel) supabaseClient.removeChannel(cloudChannel);
+  cloudChannel = supabaseClient.channel("siklusku-data-" + currentUser.id)
+    .on("postgres_changes", {
+      event: "UPDATE", schema: "public", table: "siklusku_data",
+      filter: "user_id=eq." + currentUser.id
+    }, payload => {
+      const row = payload.new;
+      if (!row || row.user_id !== currentUser.id) return;
+      applyingCloudData = true;
+      accounts = Array.isArray(row.accounts) ? row.accounts : accounts;
+      journals = Array.isArray(row.journals) ? row.journals : journals;
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accounts));
+      localStorage.setItem(JOURNAL_KEY, JSON.stringify(journals));
+      applyingCloudData = false;
+      renderAllData();
+      setCloudStatus("Data terbaru dari perangkat lain diterima · " + new Date().toLocaleTimeString("id-ID"));
+    })
+    .subscribe();
+}
+async function signOutCloud() {
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) { setCloudStatus("Gagal keluar: " + error.message, true); return; }
+  currentUser = null;
+  if (cloudChannel) supabaseClient.removeChannel(cloudChannel);
+  document.body.classList.remove("authenticated");
+  document.getElementById("authWrap").style.display = "block";
+  setCloudStatus("Kamu sudah keluar dari SiklusKu Cloud.");
+}
+
 const ACCOUNT_KEY = "siklusku_accounts_v1";
 const JOURNAL_KEY = "siklusku_journals_v1";
 
@@ -385,6 +559,7 @@ let journals = loadData(JOURNAL_KEY, []);
 function saveData(key, data) {
   try {
     localStorage.setItem(key, JSON.stringify(data));
+    if (key === ACCOUNT_KEY || key === JOURNAL_KEY) scheduleCloudSync();
     return true;
   } catch (e) {
     alert("Data gagal disimpan. Periksa penyimpanan browser.");
@@ -1271,6 +1446,35 @@ document.getElementById("restoreBackup").addEventListener("click", () => {
 });
 
 updateBackupSummary();
+
+function renderAllData() {
+  renderAccounts();
+  renderJournals();
+  renderLedgerOptions();
+  renderTrialBalance();
+  renderIncomeStatement();
+  renderBalanceSheet();
+  updateBackupSummary();
+  updateTotals();
+}
+(async function initializeAuth() {
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) {
+    authMessage("Tidak dapat memeriksa sesi: " + error.message, true);
+    return;
+  }
+  if (data.session && data.session.user) {
+    try { await activateCloud(data.session.user); }
+    catch (err) { setCloudStatus("Gagal memuat data cloud: " + (err.message || "kesalahan"), true); }
+  }
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      document.body.classList.remove("authenticated");
+      document.getElementById("authWrap").style.display = "block";
+    }
+  });
+})();
 
 </script>
 </body>
