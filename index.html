@@ -1,17 +1,18 @@
 
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SiklusKu — Dashboard Akuntansi</title>
+<title>SiklusKu</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;background:#f4f6fa;color:#202938}
 header{background:#173b35;color:white;padding:20px}
 header h1{margin:0 0 5px}
 header p{margin:0;font-size:13px}
-nav{display:flex;gap:8px;overflow-x:auto;padding:12px;background:white;position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #0000000d}
+nav{display:flex;gap:8px;overflow-x:auto;padding:12px;background:white}
 nav button{flex-shrink:0;border:0;border-radius:8px;padding:11px 14px;background:#eef2f0;color:#173b35}
 nav button.active{background:#173b35;color:white}
 main{max-width:1000px;margin:auto;padding:16px}
@@ -51,33 +52,6 @@ body:not(.authenticated) nav,body:not(.authenticated) main{display:none}
 body.authenticated #authWrap{display:none}
 body.authenticated #cloudAccountBar{display:block !important}
 @media(max-width:480px){.auth-actions{grid-template-columns:1fr}}
-
-/* SiklusKu one-page workspace refresh */
-html{scroll-behavior:smooth;scroll-padding-top:82px}
-body{background:#f5f7f6;color:#172522}
-header{background:linear-gradient(120deg,#123b32,#236b58);padding:24px max(18px,calc((100% - 1120px)/2));}
-main{max-width:1120px;padding:20px 16px 48px}
-nav{padding:10px max(12px,calc((100% - 1120px)/2));gap:7px;flex-wrap:nowrap}
-nav button{font-size:13px;white-space:nowrap}
-main section.page{display:block;scroll-margin-top:82px;margin:0 0 28px}
-#dashboard{padding:0;margin-bottom:20px}
-#dashboard h2{font-size:18px;margin:8px 0 12px;color:#52615c}
-#dashboard .cards{display:grid;grid-template-columns:minmax(0,2fr) minmax(120px,1fr) minmax(120px,1fr);gap:12px}
-#dashboard .card{min-height:104px;margin:0;box-shadow:0 5px 18px #173b3508}
-#dashboard .card:first-child{background:#123b32;color:white;border:0;display:flex;flex-direction:column;justify-content:center;min-height:145px}
-#dashboard .card:first-child p{color:#d6e7df;font-size:14px}
-#dashboard .card:first-child strong{font-size:clamp(28px,4vw,42px);margin:5px 0}
-#dashboard .card:first-child small{color:#d6e7df}
-#dashboard .card:not(:first-child){display:flex;flex-direction:column;justify-content:center}
-main section.page>h2{padding-bottom:10px;border-bottom:1px solid #dfe7e3;margin-top:28px;color:#173b35}
-.panel,.card{border-color:#e0e8e3;border-radius:14px;box-shadow:0 4px 18px #173b3507}
-#journal .panel{padding:18px}
-#cyclePanel{background:#f0f6f2}
-button{transition:filter .15s ease,transform .15s ease}
-button:hover{filter:brightness(.97)}
-button:active{transform:translateY(1px)}
-@media(max-width:650px){main{padding:14px 12px 36px}#dashboard .cards{grid-template-columns:1fr 1fr}#dashboard .card:first-child{grid-column:1/-1;min-height:125px}nav{top:0}#dashboard .card strong{font-size:22px}}
-
 </style>
 </head>
 <body>
@@ -107,52 +81,68 @@ button:active{transform:translateY(1px)}
 <div id="cloudStatus" class="cloud-status" style="display:none">Cloud belum terhubung.</div>
 <div id="cloudAccountBar" style="display:none;text-align:right;padding:0 16px 8px"><button type="button" class="secondary" onclick="signOutCloud()">Keluar dari akun</button></div>
 
-<nav aria-label="Navigasi halaman">
-<button class="active" data-page="dashboard">Ringkasan</button>
-<button data-page="journal">Input Jurnal</button>
-<button data-page="accounts">COA</button>
+<nav>
+<button data-page="accounts">Daftar Akun</button>
+<button data-page="journal">Jurnal Umum</button>
 <button data-page="ledger">Buku Besar</button>
+<button data-page="reports">Laporan</button>
 <button data-page="trialbalance">Neraca Saldo</button>
 <button data-page="income">Laba Rugi</button>
 <button data-page="balanceSheet">Neraca</button>
-<button data-page="reports">Laporan</button>
 <button data-page="backup">Backup Data</button>
+<button class="active" data-page="dashboard">Dashboard</button>
 </nav>
 
 <main>
 
-<section id="dashboard" class="page">
-<h2>Ringkasan Keuangan</h2>
-<div class="cards">
-<div class="card"><p>Balance Laba Bersih</p><strong id="netProfitBalance">Rp0</strong><small id="netProfitPeriod" class="muted">Berdasarkan seluruh jurnal tersimpan</small></div>
-<div class="card"><p>Jumlah Akun</p><strong id="accountCount">0</strong></div>
-<div class="card"><p>Transaksi Jurnal</p><strong id="journalCount">0</strong></div>
+
+<section id="accounts" class="hidden">
+<h2>Daftar Akun</h2>
+<div id="accountMessage"></div>
+<div class="panel">
+<h3>Tambah Akun</h3>
+<form id="accountForm">
+<label for="code">Kode Akun</label>
+<input id="code" required maxlength="20" placeholder="Contoh: 104">
+<label for="name">Nama Akun</label>
+<input id="name" required maxlength="80" placeholder="Contoh: Tabungan">
+<label for="group">Kelompok Akun</label>
+<select id="group">
+<option>Aset</option><option>Liabilitas</option><option>Ekuitas</option><option>Pendapatan</option><option>Beban</option>
+</select>
+<label for="normal">Saldo Normal</label>
+<select id="normal"><option>Debit</option><option>Kredit</option></select>
+<button class="primary" type="submit">Simpan Akun</button>
+</form>
+</div>
+<div class="panel">
+<h3>Akun Tersimpan</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Kode</th><th>Nama Akun</th><th>Kelompok</th><th>Normal</th><th>Aksi</th></tr></thead>
+<tbody id="accountRows"></tbody>
+</table></div>
 </div>
 </section>
 
-<section id="journal" class="page">
+<section id="journal" class="hidden">
 <h2>Jurnal Umum</h2>
 <p class="muted">Isi transaksi dan pastikan total debit sama dengan total kredit.</p>
 <div id="journalMessage"></div>
 
 <div class="panel" id="cyclePanel">
-<h3>Template Transaksi Otomatis</h3>
+<h3>Siklus Otomatis</h3>
 <p class="muted">Buat template transaksi berulang, lalu pilih template dan masukkan nominal untuk mengisi jurnal otomatis.</p>
 <form id="cycleForm">
 <label for="cycleName">Nama siklus</label><input id="cycleName" required maxlength="80" placeholder="Contoh: Makan harian">
-<label for="cycleCategory">Kategori siklus</label>
-<select id="cycleCategory" required>
-<option value="Pendapatan">Siklus Pendapatan</option><option value="Pengeluaran">Siklus Pengeluaran</option><option value="Pembelian">Siklus Pembelian</option><option value="Persediaan">Siklus Persediaan</option><option value="Penggajian">Siklus Penggajian</option><option value="Pendanaan">Siklus Pendanaan</option><option value="Investasi">Siklus Investasi</option><option value="Umum">Umum / Lainnya</option>
-</select>
 <label for="cycleDesc">Keterangan default</label><input id="cycleDesc" maxlength="200" placeholder="Contoh: Pembelian makan">
 <div class="line-grid">
 <div><label for="cycleDebit">Akun debit</label><select id="cycleDebit" required></select></div>
 <div><label for="cycleCredit">Akun kredit</label><select id="cycleCredit" required></select></div>
 </div>
-<button class="secondary" type="submit">Simpan Template</button>
+<button class="secondary" type="submit">Simpan Siklus</button>
 </form>
 <div class="line-grid" style="margin-top:12px">
-<div><label for="cyclePick">Pilih template transaksi</label><select id="cyclePick"><option value="">-- Pilih template transaksi --</option></select></div>
+<div><label for="cyclePick">Pilih siklus</label><select id="cyclePick"><option value="">-- Pilih siklus --</option></select></div>
 <div><label for="cycleAmount">Nominal (Rp)</label><input id="cycleAmount" type="number" min="1" step="1" placeholder="Contoh: 15000"></div>
 </div>
 <button type="button" class="primary" id="applyCycle">Gunakan Siklus</button>
@@ -166,10 +156,6 @@ button:active{transform:translateY(1px)}
 <input id="jDate" type="date" required>
 <label for="jRef">Nomor Referensi</label>
 <input id="jRef" maxlength="40" placeholder="Contoh: TRX-001">
-<label for="jCategory">Kategori Siklus Akuntansi</label>
-<select id="jCategory" required>
-<option value="Umum">Umum / Lainnya</option><option value="Pendapatan">Siklus Pendapatan</option><option value="Pengeluaran">Siklus Pengeluaran</option><option value="Pembelian">Siklus Pembelian</option><option value="Persediaan">Siklus Persediaan</option><option value="Penggajian">Siklus Penggajian</option><option value="Pendanaan">Siklus Pendanaan</option><option value="Investasi">Siklus Investasi</option><option value="Penutupan">Jurnal Penutup</option>
-</select>
 <label for="jDesc">Keterangan Transaksi</label>
 <textarea id="jDesc" rows="2" maxlength="250" required placeholder="Contoh: Menerima pendapatan pekerjaan secara tunai"></textarea>
 
@@ -203,36 +189,8 @@ button:active{transform:translateY(1px)}
 </div>
 </section>
 
-<div class="muted" style="margin:4px 0 8px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase">Modul Akuntansi</div>
-<section id="accounts" class="page">
-<h2>Daftar Akun</h2>
-<div id="accountMessage"></div>
-<div class="panel">
-<h3>Tambah Akun</h3>
-<form id="accountForm">
-<label for="code">Kode Akun</label>
-<input id="code" required maxlength="20" placeholder="Contoh: 104">
-<label for="name">Nama Akun</label>
-<input id="name" required maxlength="80" placeholder="Contoh: Tabungan">
-<label for="group">Kelompok Akun</label>
-<select id="group">
-<option>Aset</option><option>Liabilitas</option><option>Ekuitas</option><option>Pendapatan</option><option>Beban</option>
-</select>
-<label for="normal">Saldo Normal</label>
-<select id="normal"><option>Debit</option><option>Kredit</option></select>
-<button class="primary" type="submit">Simpan Akun</button>
-</form>
-</div>
-<div class="panel">
-<h3>Akun Tersimpan</h3>
-<div class="table-wrap"><table>
-<thead><tr><th>Kode</th><th>Nama Akun</th><th>Kelompok</th><th>Normal</th><th>Aksi</th></tr></thead>
-<tbody id="accountRows"></tbody>
-</table></div>
-</div>
-</section>
 
-<section id="ledger" class="page">
+<section id="ledger" class="hidden">
   <h2>Buku Besar</h2>
   <p class="muted">
     Pilih akun untuk melihat mutasi dan saldo berjalan
@@ -265,6 +223,7 @@ button:active{transform:translateY(1px)}
   </div>
 </section>
 
+
 <section id="trialbalance" class="page">
   <h2>Neraca Saldo</h2>
   <p>Saldo akun berdasarkan seluruh jurnal yang tersimpan.</p>
@@ -293,6 +252,7 @@ button:active{transform:translateY(1px)}
   <p id="trialBalanceStatus"></p>
 </section>
 
+  
 <section id="income" class="page">
   <h2>Laporan Laba Rugi</h2>
   <p>Perhitungan pendapatan, beban, dan laba bersih.</p>
@@ -350,6 +310,7 @@ button:active{transform:translateY(1px)}
   </table>
 </section>
 
+
 <section id="balanceSheet" class="page">
   <h2>Neraca</h2>
   <p>Laporan Posisi Keuangan</p>
@@ -405,7 +366,8 @@ button:active{transform:translateY(1px)}
   </table>
 </section>
 
-<section id="reports" class="page">
+  
+<section id="reports" class="hidden">
 <h2>Ekspor Laporan ke Excel</h2>
 <div class="panel">
 <h3>Unduh laporan keuangan</h3>
@@ -414,8 +376,7 @@ button:active{transform:translateY(1px)}
 <div id="exportReportMessage" aria-live="polite"></div>
 </div>
 </section>
-
-<section id="backup" class="page">
+<section id="backup" class="hidden">
   <h2>Backup & Pemulihan Data</h2>
   <p class="muted">Simpan salinan COA dan jurnal dari perangkat ini. Data laptop dan HP terpisah, jadi lakukan ekspor di masing-masing perangkat.</p>
   <div class="panel">
@@ -435,29 +396,27 @@ button:active{transform:translateY(1px)}
   </div>
   <div id="backupMessage"></div>
 </section>
+<section id="dashboard">
+<h2>Dashboard</h2>
+<p class="muted">Ringkasan pencatatan keuanganmu.</p>
+<div class="cards">
+<div class="card"><p>Jumlah Akun</p><strong id="accountCount">0</strong></div>
+<div class="card"><p>Transaksi Jurnal</p><strong id="journalCount">0</strong></div>
+<div class="card"><p>Total Debit Jurnal</p><strong id="debitSummary">Rp0</strong></div>
+</div>
+<div class="panel">
+<h3>Mulai dari sini</h3>
+<p class="muted">Buat daftar akun terlebih dahulu, lalu catat setiap transaksi melalui Jurnal Umum. Pastikan debit dan kredit seimbang.</p>
+</div>
+</section>
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
 
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://gprvpxsmtjmxfxpdangv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0A97xGjyxBv1Y-VO84sL3g_483XWU4F";
-if (!window.supabase || typeof window.supabase.createClient !== "function") {
-  const authError = document.getElementById("authMessage");
-  if (authError) {
-    authError.className = "message error";
-    authError.textContent = "Komponen login belum termuat dari CDN. Periksa koneksi internet atau pemblokir script, lalu muat ulang halaman.";
-  }
-  const authFormFallback = document.getElementById("authForm");
-  if (authFormFallback) authFormFallback.addEventListener("submit", function(e) {
-    e.preventDefault();
-    const box = document.getElementById("authMessage");
-    box.className = "message error";
-    box.textContent = "Login belum dapat dijalankan karena library Supabase gagal dimuat. Coba jaringan lain/nonaktifkan pemblokir script, lalu muat ulang.";
-  });
-  throw new Error("Supabase JS library tidak tersedia");
-}
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
@@ -487,27 +446,9 @@ function authMessage(text, error=false) {
 async function signIn() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
-  // Jangan biarkan layar login menggantung selamanya jika request jaringan tidak selesai.
-  let timeoutId;
-  try {
-    const result = await Promise.race([
-      supabaseClient.auth.signInWithPassword({ email, password }),
-      new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(
-          "Permintaan login tidak mendapat respons selama 15 detik. Periksa koneksi internet, lalu coba muat ulang halaman. Jika tetap terjadi, cek status proyek dan URL Supabase."
-        )), 15000);
-      })
-    ]);
-    if (result.error) throw result.error;
-    // SIGNED_IN listener activates the session once; avoid concurrent duplicate loading.
-  } catch (err) {
-    if (err && (err.name === "TypeError" || /fetch|network|failed to fetch/i.test(err.message || ""))) {
-      throw new Error("Tidak dapat menghubungi Supabase. Periksa koneksi internet, URL proyek, atau pemblokir jaringan.");
-    }
-    throw err;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  // SIGNED_IN listener activates the session once; avoid concurrent duplicate loading.
 }
 async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
@@ -523,20 +464,10 @@ async function signUp() {
 document.getElementById("authForm").addEventListener("submit", async e => {
   e.preventDefault();
   const btn = document.getElementById("signInBtn");
-  if (!document.getElementById("authEmail").value.trim() ||
-      !document.getElementById("authPassword").value) {
-    authMessage("Isi email dan kata sandi terlebih dahulu.", true);
-    return;
-  }
-  authMessage("Menghubungi server login… tunggu maksimal 15 detik.");
   btn.disabled = true;
-  try {
-    await signIn();
-  } catch (err) {
-    authMessage((err && err.message) || "Gagal masuk. Periksa koneksi dan data login.", true);
-  } finally {
-    btn.disabled = false;
-  }
+  try { await signIn(); }
+  catch (err) { authMessage(err.message || "Gagal masuk.", true); }
+  finally { btn.disabled = false; }
 });
 document.getElementById("signUpBtn").addEventListener("click", async () => {
   const btn = document.getElementById("signUpBtn");
@@ -739,9 +670,10 @@ function message(id, text, error=false) {
 
 document.querySelectorAll("nav button").forEach(button => {
   button.addEventListener("click", () => {
-    const target = document.getElementById(button.dataset.page);
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === button));
+    document.querySelectorAll("main section").forEach(s => s.classList.add("hidden"));
+    document.getElementById(button.dataset.page).classList.remove("hidden");
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    button.classList.add("active");
   });
 });
 
@@ -875,7 +807,7 @@ function refreshCycleAccountOptions() {
 function renderCycles() {
   const pick=document.getElementById("cyclePick"); if(!pick) return;
   const previous=pick.value; pick.replaceChildren();
-  const blank=document.createElement("option"); blank.value=""; blank.textContent="-- Pilih template transaksi --"; pick.appendChild(blank);
+  const blank=document.createElement("option"); blank.value=""; blank.textContent="-- Pilih siklus --"; pick.appendChild(blank);
   cycles.forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.name;pick.appendChild(o)});
   if(cycles.some(c=>c.id===previous))pick.value=previous;
   const list=document.getElementById("cycleList"); list.replaceChildren();
@@ -883,9 +815,9 @@ function renderCycles() {
     const row=document.createElement("div"); row.className="line";
     const d=document.createElement("div");
     const debit=accounts.find(a=>a.id===c.debitId), credit=accounts.find(a=>a.id===c.creditId);
-    d.textContent=c.name+" · "+(c.category||"Umum")+" · Debit: "+(debit?debit.name:"akun tidak tersedia")+" · Kredit: "+(credit?credit.name:"akun tidak tersedia");
-    const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Hapus template";del.style.marginTop="8px";
-    del.addEventListener("click",()=>{if(confirm("Hapus template "+c.name+"?")){cycles=cycles.filter(x=>x.id!==c.id);saveCycles();}});
+    d.textContent=c.name+" · Debit: "+(debit?debit.name:"akun tidak tersedia")+" · Kredit: "+(credit?credit.name:"akun tidak tersedia");
+    const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Hapus siklus";del.style.marginTop="8px";
+    del.addEventListener("click",()=>{if(confirm("Hapus siklus "+c.name+"?")){cycles=cycles.filter(x=>x.id!==c.id);saveCycles();}});
     row.append(d,del);list.appendChild(row);
   });
 }
@@ -895,20 +827,19 @@ document.getElementById("cycleForm").addEventListener("submit",e=>{
   const desc=document.getElementById("cycleDesc").value.trim();
   const debitId=document.getElementById("cycleDebit").value, creditId=document.getElementById("cycleCredit").value;
   if(!debitId||!creditId||debitId===creditId){message("cycleMessage","Pilih dua akun berbeda untuk debit dan kredit.",true);return;}
-  cycles.push({id:"cy-"+Date.now()+"-"+Math.random().toString(16).slice(2),name,desc,category:document.getElementById("cycleCategory").value,debitId,creditId});
+  cycles.push({id:"cy-"+Date.now()+"-"+Math.random().toString(16).slice(2),name,desc,debitId,creditId});
   if(saveCycles()){e.target.reset();message("cycleMessage","Siklus berhasil disimpan.");}
 });
 document.getElementById("applyCycle").addEventListener("click",()=>{
   const c=cycles.find(x=>x.id===document.getElementById("cyclePick").value);
   const amount=Number(document.getElementById("cycleAmount").value);
-  if(!c){message("cycleMessage","Pilih template transaksi terlebih dahulu.",true);return;}
+  if(!c){message("cycleMessage","Pilih siklus terlebih dahulu.",true);return;}
   if(!Number.isFinite(amount)||amount<=0){message("cycleMessage","Masukkan nominal lebih dari nol.",true);return;}
   const da=accounts.find(a=>a.id===c.debitId), ca=accounts.find(a=>a.id===c.creditId);
   if(!da||!ca){message("cycleMessage","Akun pada siklus tidak ditemukan. Perbarui siklus ini.",true);return;}
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page==="journal"));
-  document.getElementById("journal").scrollIntoView({behavior:"smooth",block:"start"});
+  document.querySelectorAll("main section").forEach(sec=>sec.classList.add("hidden"));document.getElementById("journal").classList.remove("hidden");
   document.getElementById("jDesc").value=c.desc||c.name;
-  document.getElementById("jCategory").value=c.category||"Umum";
   const lines=document.getElementById("journalLines");lines.replaceChildren();addJournalLine();addJournalLine();
   const els=[...lines.querySelectorAll(".line")];els[0].querySelector(".account-select").value=c.debitId;els[0].querySelector(".debit-input").value=String(amount);els[1].querySelector(".account-select").value=c.creditId;els[1].querySelector(".credit-input").value=String(amount);
   updateTotals();message("cycleMessage","Jurnal terisi otomatis. Periksa tanggal dan keterangan, lalu simpan jurnal.");
@@ -1092,7 +1023,7 @@ const credit = bacaAngka(creditInput);
 
   const entry = {
     id: editingJournalId || ("j-" + Date.now() + "-" + Math.random().toString(16).slice(2)),
-    date,ref,desc,category:document.getElementById("jCategory").value,lines,totalDebit,totalCredit
+    date,ref,desc,lines,totalDebit,totalCredit
   };
 
   const old = journals;
@@ -1162,7 +1093,7 @@ function renderJournals() {
     dateCell.style.whiteSpace = "pre-line";
 
     const descCell = document.createElement("td");
-    descCell.textContent = (j.category ? "["+j.category+"] " : "[Umum] ") + j.desc;
+    descCell.textContent = j.desc;
 
     const linesCell = document.createElement("td");
     j.lines.forEach((line,index) => {
@@ -1184,7 +1115,6 @@ function renderJournals() {
       document.getElementById("jDate").value = j.date || localDate();
       document.getElementById("jRef").value = j.ref || "";
       document.getElementById("jDesc").value = j.desc || "";
-      document.getElementById("jCategory").value = j.category || "Umum";
       const container=document.getElementById("journalLines"); container.replaceChildren();
       (j.lines||[]).forEach(line=>{
         addJournalLine(); const el=container.lastElementChild;
@@ -1195,7 +1125,7 @@ function renderJournals() {
       if((j.lines||[]).length===0){addJournalLine();addJournalLine();}
       updateTotals(); document.querySelector('#journalForm button[type="submit"]').textContent="Simpan Perubahan";
       document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page==="journal"));
-      document.getElementById("journal").scrollIntoView({behavior:"smooth",block:"start"});
+      document.querySelectorAll("main section").forEach(sec=>sec.classList.add("hidden"));document.getElementById("journal").classList.remove("hidden");
       message("journalMessage","Mode edit aktif. Simpan perubahan setelah selesai.");
     });
     const btn = document.createElement("button");
@@ -1219,7 +1149,6 @@ function renderJournals() {
   document.getElementById("journalCount").textContent = journals.length;
   const sum = journals.reduce((total,j) => total + j.totalDebit,0);
   document.getElementById("debitSummary").textContent = rupiah(sum);
-  updateNetProfitBalance();
 }
 
 document.getElementById("jDate").value = localDate();
@@ -1297,8 +1226,8 @@ function exportReportsExcel() {
   XLSX.utils.sheet_add_aoa(coa, [["Kode Akun","Nama Akun","Kelompok","Saldo Normal"]], {origin:"A4"});
   const accountRows = accounts.map(a=>[a.code,a.name,a.group,a.normal]);
   XLSX.utils.sheet_add_aoa(coa, accountRows, {origin:"A5"});
-  const journalRows = [["Tanggal","Referensi","Kategori Siklus","Keterangan","Kode Akun","Nama Akun","Debit","Kredit"]];
-  journals.slice().reverse().forEach(j => j.lines.forEach(line => journalRows.push([j.date,j.ref||"",j.category||"Umum",j.desc,line.code,line.name,Number(line.debit)||0,Number(line.credit)||0])));
+  const journalRows = [["Tanggal","Referensi","Keterangan","Kode Akun","Nama Akun","Debit","Kredit"]];
+  journals.slice().reverse().forEach(j => j.lines.forEach(line => journalRows.push([j.date,j.ref||"",j.desc,line.code,line.name,Number(line.debit)||0,Number(line.credit)||0])));
   const js = XLSX.utils.aoa_to_sheet([["JURNAL UMUM"],["Diekspor pada",new Date().toLocaleString("id-ID")],[],...journalRows]);
   js["!cols"] = [{wch:14},{wch:16},{wch:32},{wch:14},{wch:24},{wch:18},{wch:18}];
   XLSX.utils.book_append_sheet(wb, js, "Jurnal Umum");
@@ -1793,20 +1722,7 @@ document.getElementById("restoreBackup").addEventListener("click", () => {
 
 updateBackupSummary();
 
-function updateNetProfitBalance() {
-  const revenueIds = new Set(accounts.filter(a => a.group === "Pendapatan").map(a => a.id));
-  const expenseIds = new Set(accounts.filter(a => a.group === "Beban").map(a => a.id));
-  let revenue = 0, expense = 0;
-  journals.filter(j => !j.closing).forEach(j => (j.lines || []).forEach(line => {
-    if (revenueIds.has(line.accountId)) revenue += (Number(line.credit)||0) - (Number(line.debit)||0);
-    if (expenseIds.has(line.accountId)) expense += (Number(line.debit)||0) - (Number(line.credit)||0);
-  }));
-  const el = document.getElementById("netProfitBalance");
-  if (el) el.textContent = rupiah(revenue - expense);
-}
-
 function renderAllData() {
-  updateNetProfitBalance();
   renderAccounts();
   renderJournals();
   renderLedgerOptions();
@@ -1869,16 +1785,6 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   }
 })();
 
-window.addEventListener("error", function (event) {
-  const authVisible = !document.body.classList.contains("authenticated");
-  if (authVisible && event && event.message) {
-    const el = document.getElementById("authMessage");
-    if (el && !el.textContent) {
-      el.className = "message error";
-      el.textContent = "Aplikasi gagal dijalankan: " + event.message + ". Muat ulang halaman; jika berulang, periksa Console browser.";
-    }
-  }
-});
 </script>
 </body>
 </html>
