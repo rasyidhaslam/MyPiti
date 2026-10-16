@@ -444,14 +444,21 @@ body.authenticated #cloudAccountBar{display:block !important}
 </div>
 <div class="dash-section-title"><h3>Catat transaksi</h3><span class="muted">Pencatatan jurnal</span></div>
 <div class="dash-journal">
-  <p class="muted" style="margin-top:0">Mulai pencatatan di halaman Jurnal Umum. Form lengkap tetap tersedia agar transaksi dan debit-kredit tervalidasi.</p>
-  <div class="dash-journal-grid">
-    <div><label>Tanggal transaksi</label><input type="date" id="dashDate" disabled></div>
-    <div><label>Jenis transaksi</label><select id="dashType" disabled><option>Jurnal umum</option></select></div>
-    <div class="dash-full"><label>Keterangan</label><input type="text" placeholder="Contoh: Pembelian kebutuhan harian" disabled></div>
-    <div class="dash-full"><button type="button" class="primary" onclick="document.querySelector('nav button[data-page=journal]').click()">+ Buka form jurnal umum</button></div>
-  </div>
+  <p class="muted" style="margin-top:0">Isi transaksi di sini. Transaksi akan diteruskan ke form Jurnal Umum agar debit-kredit diperiksa sebelum disimpan.</p>
+  <form id="dashQuickJournalForm">
+    <div class="dash-journal-grid">
+      <div><label for="dashDate">Tanggal transaksi</label><input type="date" id="dashDate" required></div>
+      <div><label for="dashType">Jenis transaksi</label><select id="dashType"><option value="Jurnal umum">Jurnal umum</option></select></div>
+      <div class="dash-full"><label for="dashDesc">Keterangan</label><input type="text" id="dashDesc" maxlength="250" required placeholder="Contoh: Pembelian kebutuhan harian"></div>
+      <div><label for="dashDebitAccount">Akun debit</label><select id="dashDebitAccount" required></select></div>
+      <div><label for="dashCreditAccount">Akun kredit</label><select id="dashCreditAccount" required></select></div>
+      <div class="dash-full"><label for="dashAmount">Nominal (Rp)</label><input type="number" id="dashAmount" min="1" step="1" required placeholder="Contoh: 50000"></div>
+      <div class="dash-full"><button type="submit" class="primary">Lanjutkan ke Jurnal Umum →</button></div>
+    </div>
+  </form>
 </div>
+<div class="dash-section-title"><h3>Jurnal Umum</h3><button type="button" class="secondary" id="dashOpenJournal">Buka halaman lengkap</button></div>
+<div class="panel"><p class="muted">Riwayat jurnal terbaru yang sudah tersimpan.</p><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Keterangan</th><th>Total</th></tr></thead><tbody id="dashRecentJournals"><tr><td colspan="3">Memuat jurnal…</td></tr></tbody></table></div></div>
 <div class="dash-section-title"><h3>Modul akuntansi</h3><span class="muted">Pilih untuk membuka</span></div>
 <div class="module-grid">
   <button class="module-card" type="button" data-dash-page="accounts"><span class="module-icon">▤</span><span><strong>Daftar Akun / COA</strong><small>Kelola akun keuangan</small></span></button>
@@ -1809,7 +1816,54 @@ function renderAllData() {
   updateTotals();
   refreshCycleAccountOptions();
   renderCycles();
+  updateDashboardJournalTools();
 }
+const dashDateInput = document.getElementById("dashDate");
+if (dashDateInput && !dashDateInput.value) dashDateInput.value = new Date().toISOString().slice(0,10);
+// Form transaksi cepat pada dashboard terhubung ke form Jurnal Umum yang tervalidasi.
+function updateDashboardJournalTools() {
+  const debitSel = document.getElementById("dashDebitAccount");
+  const creditSel = document.getElementById("dashCreditAccount");
+  const source = document.querySelector("#journalLines .account-select");
+  if (source && debitSel && creditSel) {
+    const options = [...source.options].map(o => `<option value="${o.value.replace(/&/g,"&amp;").replace(/\"/g,"&quot;")}">${o.textContent}</option>`).join("");
+    if (debitSel.innerHTML !== options) debitSel.innerHTML = options;
+    if (creditSel.innerHTML !== options) creditSel.innerHTML = options;
+  }
+  const body = document.getElementById("dashRecentJournals");
+  if (body && Array.isArray(journals)) {
+    const recent = [...journals].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,5);
+    body.innerHTML = recent.length ? recent.map(j => `<tr><td>${j.date || "—"}</td><td>${escapeHtml(j.description || j.desc || "—")}</td><td>${formatRupiah(j.totalDebit || j.total || 0)}</td></tr>`).join("") : '<tr><td colspan="3">Belum ada jurnal tersimpan.</td></tr>';
+  }
+}
+document.getElementById("dashQuickJournalForm")?.addEventListener("submit", e => {
+  e.preventDefault();
+  const date = document.getElementById("dashDate").value;
+  const desc = document.getElementById("dashDesc").value.trim();
+  const amount = Number(document.getElementById("dashAmount").value);
+  const debitId = document.getElementById("dashDebitAccount").value;
+  const creditId = document.getElementById("dashCreditAccount").value;
+  if (!date || !desc || !amount || amount <= 0 || !debitId || !creditId || debitId === creditId) {
+    alert("Lengkapi transaksi dan pilih dua akun yang berbeda dengan nominal lebih dari nol."); return;
+  }
+  document.querySelector('nav button[data-page="journal"]')?.click();
+  document.getElementById("jDate").value = date;
+  document.getElementById("jDesc").value = desc;
+  const lines = document.getElementById("journalLines");
+  lines.replaceChildren();
+  addJournalLine(); addJournalLine();
+  const rows = [...lines.querySelectorAll(".line")];
+  rows[0].querySelector(".account-select").value = debitId;
+  rows[0].querySelector(".debit-input").value = String(amount);
+  rows[1].querySelector(".account-select").value = creditId;
+  rows[1].querySelector(".credit-input").value = String(amount);
+  updateTotals();
+  document.getElementById("journalForm").scrollIntoView({behavior:"smooth", block:"start"});
+  const msg = document.getElementById("balanceStatus");
+  if (msg) msg.textContent = "Transaksi dari dashboard sudah diisikan. Periksa lalu klik Simpan Jurnal.";
+});
+document.getElementById("dashOpenJournal")?.addEventListener("click", () => document.querySelector('nav button[data-page="journal"]')?.click());
+
 // Pasang listener auth sebelum memuat data agar sesi tidak terlewat saat halaman dibuka ulang.
 let authInitializationDone = false;
 let intentionalSignOut = false;
