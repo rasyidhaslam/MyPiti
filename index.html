@@ -174,6 +174,7 @@ body.authenticated #cloudAccountBar{display:block !important}
   </details>
 </div>
 <div id="journalLines"></div>
+<datalist id="journalAccountSuggestions"></datalist>
 <button type="button" class="secondary" id="addLine">+ Tambah Baris Akun</button>
 
 <div class="totals" style="margin-top:15px">
@@ -772,14 +773,32 @@ document.getElementById("quickAccountForm").addEventListener("submit", e => {
   // Pilih akun baru pada baris jurnal terakhir yang belum memiliki akun.
   const lines = [...document.querySelectorAll("#journalLines .line")];
   const target = [...lines].reverse().find(line => !line.querySelector(".account-select").value) || lines[lines.length - 1];
-  if (target) target.querySelector(".account-select").value = account.id;
+  if (target) {
+    target.querySelector(".account-select").value = account.id;
+    target.querySelector(".account-search").value = accountDisplay(account);
+  }
   e.target.reset();
   document.getElementById("quickGroup").value = "Aset";
   document.getElementById("quickNormalHint").textContent = "Saldo normal: Debit";
   message("quickAccountMessage", "Akun " + code + " — " + name + " tersimpan dan dipilih pada jurnal.");
 });
 
+function accountDisplay(account) {
+  return `${account.name} (${account.code})`;
+}
+
 function refreshAccountOptions() {
+  const suggestions = document.getElementById("journalAccountSuggestions");
+  if (suggestions) {
+    suggestions.replaceChildren();
+    accounts.forEach(account => {
+      const option = document.createElement("option");
+      option.value = accountDisplay(account);
+      option.label = `${account.code} — ${account.name}`;
+      suggestions.appendChild(option);
+    });
+  }
+
   document.querySelectorAll(".account-select").forEach(select => {
     const current = select.value;
     select.replaceChildren();
@@ -787,15 +806,30 @@ function refreshAccountOptions() {
     first.value = "";
     first.textContent = "-- Pilih akun --";
     select.appendChild(first);
-
-    accounts.forEach(a => {
+    accounts.forEach(account => {
       const option = document.createElement("option");
-      option.value = a.id;
-      option.textContent = a.code + " - " + a.name;
+      option.value = account.id;
+      option.textContent = `${account.code} - ${account.name}`;
       select.appendChild(option);
     });
     select.value = current;
+    const search = select.closest(".line")?.querySelector(".account-search");
+    if (search && current) {
+      const account = accounts.find(a => a.id === current);
+      search.value = account ? accountDisplay(account) : "";
+    }
   });
+}
+
+function syncAccountSearch(input) {
+  const line = input.closest(".line");
+  const select = line?.querySelector(".account-select");
+  if (!select) return;
+  const query = input.value.trim().toLocaleLowerCase("id-ID");
+  const match = accounts.find(account => accountDisplay(account).toLocaleLowerCase("id-ID") === query)
+    || accounts.find(account => String(account.code).toLocaleLowerCase("id-ID") === query);
+  select.value = match ? match.id : "";
+  input.setCustomValidity(match || !query ? "" : "Pilih akun dari daftar saran yang muncul.");
 }
 
 
@@ -840,10 +874,23 @@ function addJournalLine() {
   const accountWrap = document.createElement("div");
   const accountLabel = document.createElement("label");
   accountLabel.textContent = "Akun";
+  const search = document.createElement("input");
+  search.type = "text";
+  search.className = "account-search";
+  search.setAttribute("list", "journalAccountSuggestions");
+  search.placeholder = "Ketik nama akun, mis. ka → Kas";
+  search.autocomplete = "off";
+  search.required = true;
+  search.setAttribute("aria-label", "Cari akun berdasarkan nama atau kode");
   const select = document.createElement("select");
   select.className = "account-select";
   select.required = true;
-  accountLabel.appendChild(select);
+  select.tabIndex = -1;
+  select.setAttribute("aria-hidden", "true");
+  select.style.display = "none";
+  search.addEventListener("input", () => syncAccountSearch(search));
+  search.addEventListener("change", () => syncAccountSearch(search));
+  accountLabel.append(search, select);
   accountWrap.appendChild(accountLabel);
 
   const debitWrap = document.createElement("div");
@@ -957,6 +1004,7 @@ document.getElementById("journalForm").addEventListener("submit", e => {
   }
 
   for (const element of lineElements) {
+    syncAccountSearch(element.querySelector(".account-search"));
     const accountId = element.querySelector(".account-select").value;
     const debitInput = element.querySelector(".debit-input");
     const creditInput = element.querySelector(".credit-input");
@@ -964,7 +1012,7 @@ document.getElementById("journalForm").addEventListener("submit", e => {
 const credit = bacaAngka(creditInput);
 
     if (!accountId) {
-      message("journalMessage", "Pilih akun untuk setiap baris.", true);
+      message("journalMessage", "Pilih akun dari saran pencarian untuk setiap baris.", true);
       return;
     }
     if (debit < 0 || credit < 0 || (debit > 0 && credit > 0) ||
