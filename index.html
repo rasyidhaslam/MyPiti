@@ -419,7 +419,11 @@ async function signIn() {
 async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: { data: { siklusku_needs_empty_workspace: true } }
+  });
   if (error) throw error;
   if (data.session && data.user) {
     await activateCloud(data.user);
@@ -450,6 +454,34 @@ async function activateCloud(user) {
   JOURNAL_KEY = "siklusku_journals_v1_" + user.id;
   document.body.classList.add("authenticated");
   document.getElementById("authWrap").style.display = "none";
+
+  // Akun yang baru didaftarkan harus memulai workspace kosong satu kali.
+  // Marker disimpan di metadata Supabase Auth sehingga tetap ada meski verifikasi email
+  // mengharuskan pengguna login belakangan atau dari perangkat lain.
+  if (user.user_metadata?.siklusku_needs_empty_workspace === true) {
+    setCloudStatus("Menyiapkan ruang kerja kosong untuk akun baru…");
+    const { error: resetError } = await supabaseClient.from("siklusku_data").upsert({
+      user_id: user.id,
+      accounts: [],
+      journals: [],
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+    if (resetError) {
+      setCloudStatus("Gagal menyiapkan data kosong akun baru: " + resetError.message, true);
+      throw resetError;
+    }
+    const { error: metadataError } = await supabaseClient.auth.updateUser({
+      data: { siklusku_needs_empty_workspace: false }
+    });
+    if (metadataError) {
+      // Data cloud sudah kosong; jika metadata gagal diperbarui, jangan lanjutkan
+      // ke operasi yang bisa menimpa data. Tampilkan error agar dapat diperiksa.
+      setCloudStatus("Data akun baru sudah dikosongkan, tetapi penanda inisialisasi gagal diperbarui: " + metadataError.message, true);
+      throw metadataError;
+    }
+    user.user_metadata.siklusku_needs_empty_workspace = false;
+  }
+
   await loadCloudData();
   setupRealtimeSync();
 }
@@ -502,27 +534,16 @@ async function loadCloudData() {
 function scheduleCloudSync() {
   if (!currentUser || applyingCloudData) return;
   clearTimeout(cloudSyncTimer);
-  const ownerId = currentUser.id;
-  // Snapshot data pada saat perubahan dibuat, bukan saat timer selesai.
-  const accountsSnapshot = JSON.parse(JSON.stringify(accounts));
-  const journalsSnapshot = JSON.parse(JSON.stringify(journals));
   setCloudStatus("Ada perubahan · menunggu sinkronisasi…");
   cloudSyncTimer = setTimeout(async () => {
-    // Jangan pernah mengirim data bila sesi berubah saat timer menunggu.
-    if (!currentUser || currentUser.id !== ownerId) return;
     try {
       const { error } = await supabaseClient.from("siklusku_data").upsert({
-        user_id: ownerId, accounts: accountsSnapshot, journals: journalsSnapshot,
-        updated_at: new Date().toISOString()
+        user_id: currentUser.id, accounts, journals, updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
       if (error) throw error;
-      if (currentUser && currentUser.id === ownerId) {
-        setCloudStatus("Tersinkron ke cloud · " + new Date().toLocaleTimeString("id-ID"));
-      }
+      setCloudStatus("Tersinkron ke cloud · " + new Date().toLocaleTimeString("id-ID"));
     } catch (err) {
-      if (currentUser && currentUser.id === ownerId) {
-        setCloudStatus("Sinkronisasi gagal: " + (err.message || "periksa koneksi dan konfigurasi database"), true);
-      }
+      setCloudStatus("Sinkronisasi gagal: " + (err.message || "periksa koneksi dan konfigurasi database"), true);
     }
   }, 700);
 }
@@ -548,19 +569,10 @@ function setupRealtimeSync() {
     .subscribe();
 }
 async function signOutCloud() {
-  intentionalSignOut = true;
   const { error } = await supabaseClient.auth.signOut();
-  if (error) {
-    intentionalSignOut = false;
-    setCloudStatus("Gagal keluar: " + error.message, true);
-    return;
-  }
+  if (error) { setCloudStatus("Gagal keluar: " + error.message, true); return; }
   currentUser = null;
-  clearTimeout(cloudSyncTimer);
-  if (cloudChannel) {
-    await supabaseClient.removeChannel(cloudChannel);
-    cloudChannel = null;
-  }
+  if (cloudChannel) supabaseClient.removeChannel(cloudChannel);
   document.body.classList.remove("authenticated");
   document.getElementById("authWrap").style.display = "block";
   setCloudStatus("Kamu sudah keluar dari SiklusKu Cloud.");
@@ -1565,36 +1577,6 @@ function renderAllData() {
   updateBackupSummary();
   updateTotals();
 }
-// Pasang listener auth sebelum memuat data agar sesi tidak terlewat saat halaman dibuka ulang.
-let authInitializationDone = false;
-let intentionalSignOut = false;
-supabaseClient.auth.onAuthStateChange((event, session) => {
-  // Jangan mengubah tampilan pada INITIAL_SESSION; initializeAuth yang mengatur bootstrap.
-  if (event === "SIGNED_IN" && session && session.user) {
-    // Hindari memanggil operasi Supabase lain langsung di callback auth.
-    queueMicrotask(() => {
-      if (!currentUser || currentUser.id !== session.user.id) {
-        activateCloud(session.user).catch(err => {
-          setCloudStatus("Gagal memuat data cloud: " + (err.message || "kesalahan"), true);
-        });
-      }
-    });
-  } else if (event === "SIGNED_OUT") {
-    currentUser = null;
-    clearTimeout(cloudSyncTimer);
-    if (cloudChannel) {
-      supabaseClient.removeChannel(cloudChannel);
-      cloudChannel = null;
-    }
-    document.body.classList.remove("authenticated");
-    document.getElementById("authWrap").style.display = "block";
-    if (intentionalSignOut) {
-      setCloudStatus("Kamu sudah keluar dari SiklusKu Cloud.");
-      intentionalSignOut = false;
-    }
-  }
-});
-
 (async function initializeAuth() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) {
@@ -1602,18 +1584,16 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
     return;
   }
   if (data.session && data.session.user) {
-    try {
-      await activateCloud(data.session.user);
-      authInitializationDone = true;
-    } catch (err) {
-      // Kegagalan memuat cloud tidak sama dengan logout; pertahankan sesi dan tampilkan status.
-      setCloudStatus("Sesi masih aktif, tetapi data cloud gagal dimuat: " + (err.message || "kesalahan"), true);
-    }
-  } else {
-    currentUser = null;
-    document.body.classList.remove("authenticated");
-    document.getElementById("authWrap").style.display = "block";
+    try { await activateCloud(data.session.user); }
+    catch (err) { setCloudStatus("Gagal memuat data cloud: " + (err.message || "kesalahan"), true); }
   }
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      document.body.classList.remove("authenticated");
+      document.getElementById("authWrap").style.display = "block";
+    }
+  });
 })();
 
 </script>
