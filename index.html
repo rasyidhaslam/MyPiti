@@ -51,6 +51,42 @@ body:not(.authenticated) nav,body:not(.authenticated) main{display:none}
 body.authenticated #authWrap{display:none}
 body.authenticated #cloudAccountBar{display:block !important}
 @media(max-width:480px){.auth-actions{grid-template-columns:1fr}}
+
+/* Dashboard baru: perubahan visual saja, logika akuntansi dan cloud tetap dipertahankan */
+#dashboard{padding-bottom:24px}
+#dashboard .dash-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin:8px 0 20px}
+#dashboard .dash-eyebrow{font-size:11px;letter-spacing:2px;font-weight:700;color:#658078;text-transform:uppercase;margin:0 0 8px}
+#dashboard h2{font-size:clamp(25px,4vw,34px);letter-spacing:-.8px;margin:0 0 8px;color:#183d35}
+#dashboard .dash-hero .muted{margin:0;max-width:560px}
+#dashboard .dash-period{border:1px solid #dce7e2;background:#fff;border-radius:12px;padding:10px 13px;color:#45645b;font-size:12px}
+#dashboard .profit-card{background:linear-gradient(120deg,#173b35,#245c4e);color:#fff;border:0;border-radius:18px;padding:22px;margin-bottom:18px;position:relative;overflow:hidden}
+#dashboard .profit-card:after{content:'↗';position:absolute;right:20px;top:0;font-size:100px;line-height:1;color:rgba(255,255,255,.07);font-weight:700}
+#dashboard .profit-card p{color:#c9e2d8;margin:0 0 10px;font-size:13px}
+#dashboard .profit-card strong{font-size:clamp(28px,5vw,40px);letter-spacing:-1px;display:block;color:#a8f0c5}
+#dashboard .profit-card small{display:block;color:#d5e8e1;margin-top:10px}
+#dashboard .dash-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 12px}
+#dashboard .dash-section-title h3{margin:0;font-size:17px;color:#223b35}
+#dashboard .dash-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px}
+#dashboard .dash-stat{background:#fff;border:1px solid #e2e9e5;border-radius:14px;padding:15px;min-width:0}
+#dashboard .dash-stat span{display:block;color:#718078;font-size:12px;margin-bottom:8px}
+#dashboard .dash-stat strong{font-size:20px;overflow-wrap:anywhere;color:#203b34}
+#dashboard .dash-journal{background:#fff;border:1px solid #e0e8e3;border-radius:16px;padding:18px}
+#dashboard .dash-journal-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+#dashboard .dash-journal label{margin-top:10px}
+#dashboard .dash-journal .dash-full{grid-column:1/-1}
+#dashboard .dash-journal .primary{margin-top:16px}
+#dashboard .module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#dashboard .module-card{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid #e1e9e4;background:#fff;border-radius:14px;padding:15px;cursor:pointer;color:#203b34;min-height:88px;transition:transform .15s,border-color .15s,box-shadow .15s}
+#dashboard .module-card:hover{transform:translateY(-2px);border-color:#9ab8a9;box-shadow:0 8px 20px rgba(23,59,53,.07)}
+#dashboard .module-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:#edf5f0;font-size:20px}
+#dashboard .module-card strong{display:block;font-size:14px;margin-bottom:4px}
+#dashboard .module-card small{display:block;font-size:11px;color:#7a8982;line-height:1.4}
+#dashboard .backup-shortcut{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f7faf8;border:1px dashed #b9cbc1;border-radius:14px;padding:16px;text-align:left;color:#25473d;cursor:pointer}
+#dashboard .backup-shortcut strong{display:block;margin-bottom:4px}
+#dashboard .backup-shortcut small{color:#73827a}
+@media(min-width:700px){#dashboard .dash-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#dashboard .module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:420px){#dashboard .dash-journal-grid{grid-template-columns:1fr}#dashboard .dash-journal .dash-full{grid-column:auto}#dashboard .module-card{padding:12px;gap:9px}#dashboard .module-icon{width:36px;height:36px;flex-basis:36px}}
+
 </style>
 </head>
 <body>
@@ -396,17 +432,37 @@ body.authenticated #cloudAccountBar{display:block !important}
   <div id="backupMessage"></div>
 </section>
 <section id="dashboard">
-<h2>Dashboard</h2>
-<p class="muted">Ringkasan pencatatan keuanganmu.</p>
-<div class="cards">
-<div class="card"><p>Jumlah Akun</p><strong id="accountCount">0</strong></div>
-<div class="card"><p>Transaksi Jurnal</p><strong id="journalCount">0</strong></div>
-<div class="card"><p>Total Debit Jurnal</p><strong id="debitSummary">Rp0</strong></div>
+<div class="dash-hero">
+  <div><p class="dash-eyebrow">PERSONAL ACCOUNTING SYSTEM</p><h2>Keuanganmu, lebih terarah.</h2><p class="muted">Catat transaksi, pantau hasilnya, dan pahami kondisi keuanganmu dari satu tempat.</p></div>
+  <div class="dash-period" id="dashboardPeriod">RINGKASAN KEUANGAN</div>
 </div>
-<div class="panel">
-<h3>Mulai dari sini</h3>
-<p class="muted">Buat daftar akun terlebih dahulu, lalu catat setiap transaksi melalui Jurnal Umum. Pastikan debit dan kredit seimbang.</p>
+<div class="profit-card"><p id="dashboardProfitLabel">Balance Laba Bersih</p><strong id="dashboardNetProfit">Rp0</strong><small id="dashboardProfitNote">Berdasarkan seluruh jurnal yang tercatat</small></div>
+<div class="dash-stats">
+  <div class="dash-stat"><span>Jumlah Akun</span><strong id="accountCount">0</strong></div>
+  <div class="dash-stat"><span>Transaksi Jurnal</span><strong id="journalCount">0</strong></div>
+  <div class="dash-stat"><span>Total Debit Jurnal</span><strong id="debitSummary">Rp0</strong></div>
 </div>
+<div class="dash-section-title"><h3>Catat transaksi</h3><span class="muted">Pencatatan jurnal</span></div>
+<div class="dash-journal">
+  <p class="muted" style="margin-top:0">Mulai pencatatan di halaman Jurnal Umum. Form lengkap tetap tersedia agar transaksi dan debit-kredit tervalidasi.</p>
+  <div class="dash-journal-grid">
+    <div><label>Tanggal transaksi</label><input type="date" id="dashDate" disabled></div>
+    <div><label>Jenis transaksi</label><select id="dashType" disabled><option>Jurnal umum</option></select></div>
+    <div class="dash-full"><label>Keterangan</label><input type="text" placeholder="Contoh: Pembelian kebutuhan harian" disabled></div>
+    <div class="dash-full"><button type="button" class="primary" onclick="document.querySelector('nav button[data-page=journal]').click()">+ Buka form jurnal umum</button></div>
+  </div>
+</div>
+<div class="dash-section-title"><h3>Modul akuntansi</h3><span class="muted">Pilih untuk membuka</span></div>
+<div class="module-grid">
+  <button class="module-card" type="button" data-dash-page="accounts"><span class="module-icon">▤</span><span><strong>Daftar Akun / COA</strong><small>Kelola akun keuangan</small></span></button>
+  <button class="module-card" type="button" data-dash-page="ledger"><span class="module-icon">↔</span><span><strong>Buku Besar</strong><small>Mutasi dan saldo akun</small></span></button>
+  <button class="module-card" type="button" data-dash-page="trialbalance"><span class="module-icon">▦</span><span><strong>Neraca Saldo</strong><small>Periksa keseimbangan saldo</small></span></button>
+  <button class="module-card" type="button" data-dash-page="income"><span class="module-icon">↗</span><span><strong>Laba Rugi</strong><small>Pendapatan, beban, dan hasil</small></span></button>
+  <button class="module-card" type="button" data-dash-page="balanceSheet"><span class="module-icon">▥</span><span><strong>Neraca</strong><small>Posisi keuangan</small></span></button>
+  <button class="module-card" type="button" data-dash-page="reports"><span class="module-icon">▧</span><span><strong>Laporan</strong><small>Ekspor laporan ke Excel</small></span></button>
+</div>
+<div class="dash-section-title"><h3>Backup data</h3></div>
+<button type="button" class="backup-shortcut" data-dash-page="backup"><span><strong>Backup & Pemulihan Data</strong><small>Simpan atau pulihkan salinan data keuanganmu.</small></span><span aria-hidden="true">→</span></button>
 </section>
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
@@ -1157,6 +1213,7 @@ renderLedgerOptions();
 renderTrialBalance(); 
 renderIncomeStatement();
 renderBalanceSheet();
+updateDashboardSummary();
 refreshCycleAccountOptions();
 renderCycles();
   
@@ -1711,6 +1768,7 @@ document.getElementById("restoreBackup").addEventListener("click", () => {
   renderTrialBalance();
   renderIncomeStatement();
   renderBalanceSheet();
+  updateDashboardSummary();
   updateBackupSummary();
   message("backupMessage", "Pemulihan selesai. COA dan jurnal perangkat ini sudah diganti sesuai file backup.");
   document.getElementById("backupFile").value = "";
@@ -1720,6 +1778,25 @@ document.getElementById("restoreBackup").addEventListener("click", () => {
 });
 
 updateBackupSummary();
+
+function updateDashboardSummary() {
+  const net = [...document.querySelectorAll("#incomeNetResult")][0];
+  const valueText = net ? net.textContent : "Rp0";
+  const label = document.getElementById("incomeResultLabel");
+  const out = document.getElementById("dashboardNetProfit");
+  const outLabel = document.getElementById("dashboardProfitLabel");
+  if (out) out.textContent = valueText;
+  if (outLabel) outLabel.textContent = label ? "Balance " + label.textContent : "Balance Laba Bersih";
+  const period = document.getElementById("dashboardPeriod");
+  if (period) period.textContent = "DIPERBARUI " + new Date().toLocaleDateString("id-ID", {day:"2-digit", month:"short", year:"numeric"}).toUpperCase();
+}
+document.querySelectorAll("[data-dash-page]").forEach(button => button.addEventListener("click", () => {
+  const target = button.getAttribute("data-dash-page");
+  const navButton = document.querySelector('nav button[data-page="' + target + '"]');
+  if (navButton) navButton.click();
+}));
+const dashDate = document.getElementById("dashDate");
+if (dashDate) dashDate.value = localDate();
 
 function renderAllData() {
   renderAccounts();
