@@ -151,6 +151,28 @@ body.authenticated #cloudAccountBar{display:block !important}
 <textarea id="jDesc" rows="2" maxlength="250" required placeholder="Contoh: Menerima pendapatan pekerjaan secara tunai"></textarea>
 
 <h3>Rincian Jurnal</h3>
+<div class="panel" style="background:#f8faf9;border-style:dashed">
+  <h4 style="margin:0 0 6px">Butuh akun baru?</h4>
+  <p class="muted">Tambah akun tanpa meninggalkan form jurnal. Akun langsung tersedia di pilihan baris jurnal.</p>
+  <details id="quickAccountDetails">
+    <summary style="cursor:pointer;color:#173b35;font-weight:bold;padding:8px 0">+ Tambah akun dari jurnal</summary>
+    <form id="quickAccountForm">
+      <label for="quickCode">Kode Akun</label>
+      <input id="quickCode" required maxlength="20" placeholder="Contoh: 103">
+      <label for="quickName">Nama Akun</label>
+      <input id="quickName" required maxlength="80" placeholder="Contoh: Perlengkapan">
+      <label for="quickGroup">Kelompok Akun</label>
+      <select id="quickGroup" required>
+        <option value="Aset">Aset</option><option value="Liabilitas">Liabilitas</option>
+        <option value="Ekuitas">Ekuitas</option><option value="Pendapatan">Pendapatan</option>
+        <option value="Beban">Beban</option>
+      </select>
+      <p class="muted" id="quickNormalHint">Saldo normal: Debit</p>
+      <button class="secondary" type="submit">Simpan & pilih akun</button>
+      <div id="quickAccountMessage" aria-live="polite"></div>
+    </form>
+  </details>
+</div>
 <div id="journalLines"></div>
 <button type="button" class="secondary" id="addLine">+ Tambah Baris Akun</button>
 
@@ -381,7 +403,7 @@ body.authenticated #cloudAccountBar{display:block !important}
   <div id="backupMessage"></div>
 </section>
 </main>
-<footer>SiklusKu · Versi belajar 0.3</footer>
+<footer>SiklusKu · Jurnal v0.4</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -419,7 +441,11 @@ async function signIn() {
 async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: { data: { siklusku_needs_empty_workspace: true } }
+  });
   if (error) throw error;
   if (data.session && data.user) {
     await activateCloud(data.user);
@@ -450,6 +476,34 @@ async function activateCloud(user) {
   JOURNAL_KEY = "siklusku_journals_v1_" + user.id;
   document.body.classList.add("authenticated");
   document.getElementById("authWrap").style.display = "none";
+
+  // Akun yang baru didaftarkan harus memulai workspace kosong satu kali.
+  // Marker disimpan di metadata Supabase Auth sehingga tetap ada meski verifikasi email
+  // mengharuskan pengguna login belakangan atau dari perangkat lain.
+  if (user.user_metadata?.siklusku_needs_empty_workspace === true) {
+    setCloudStatus("Menyiapkan ruang kerja kosong untuk akun baru…");
+    const { error: resetError } = await supabaseClient.from("siklusku_data").upsert({
+      user_id: user.id,
+      accounts: [],
+      journals: [],
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+    if (resetError) {
+      setCloudStatus("Gagal menyiapkan data kosong akun baru: " + resetError.message, true);
+      throw resetError;
+    }
+    const { error: metadataError } = await supabaseClient.auth.updateUser({
+      data: { siklusku_needs_empty_workspace: false }
+    });
+    if (metadataError) {
+      // Data cloud sudah kosong; jika metadata gagal diperbarui, jangan lanjutkan
+      // ke operasi yang bisa menimpa data. Tampilkan error agar dapat diperiksa.
+      setCloudStatus("Data akun baru sudah dikosongkan, tetapi penanda inisialisasi gagal diperbarui: " + metadataError.message, true);
+      throw metadataError;
+    }
+    user.user_metadata.siklusku_needs_empty_workspace = false;
+  }
+
   await loadCloudData();
   setupRealtimeSync();
 }
@@ -685,6 +739,44 @@ document.getElementById("accountForm").addEventListener("submit", e => {
     message("accountMessage", "Akun berhasil disimpan.");
     refreshAccountOptions();
   } else accounts = old;
+});
+
+// Pembuatan akun cepat dari form jurnal: tetap menggunakan penyimpanan akun
+// yang sama sehingga perubahan ikut tersinkron ke Supabase untuk pengguna aktif.
+function quickExpectedNormal(group) {
+  return (group === "Aset" || group === "Beban") ? "Debit" : "Kredit";
+}
+document.getElementById("quickGroup").addEventListener("change", () => {
+  document.getElementById("quickNormalHint").textContent =
+    "Saldo normal: " + quickExpectedNormal(document.getElementById("quickGroup").value);
+});
+document.getElementById("quickAccountForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const code = document.getElementById("quickCode").value.trim();
+  const name = document.getElementById("quickName").value.trim();
+  const group = document.getElementById("quickGroup").value;
+  if (!code || !name) return;
+  if (accounts.some(a => String(a.code).toLowerCase() === code.toLowerCase())) {
+    message("quickAccountMessage", "Kode akun sudah digunakan. Gunakan kode lain.", true);
+    return;
+  }
+  const account = {
+    id:"acc-" + Date.now() + "-" + Math.random().toString(16).slice(2),
+    code, name, group, normal:quickExpectedNormal(group)
+  };
+  const old = accounts;
+  accounts = [...accounts, account];
+  if (!saveData(ACCOUNT_KEY, accounts)) { accounts = old; return; }
+  renderAccounts();
+  refreshAccountOptions();
+  // Pilih akun baru pada baris jurnal terakhir yang belum memiliki akun.
+  const lines = [...document.querySelectorAll("#journalLines .line")];
+  const target = [...lines].reverse().find(line => !line.querySelector(".account-select").value) || lines[lines.length - 1];
+  if (target) target.querySelector(".account-select").value = account.id;
+  e.target.reset();
+  document.getElementById("quickGroup").value = "Aset";
+  document.getElementById("quickNormalHint").textContent = "Saldo normal: Debit";
+  message("quickAccountMessage", "Akun " + code + " — " + name + " tersimpan dan dipilih pada jurnal.");
 });
 
 function refreshAccountOptions() {
@@ -1537,6 +1629,7 @@ updateBackupSummary();
 
 function renderAllData() {
   renderAccounts();
+  refreshAccountOptions();
   renderJournals();
   renderLedgerOptions();
   renderTrialBalance();
