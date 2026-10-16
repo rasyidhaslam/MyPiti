@@ -402,11 +402,19 @@ body.authenticated #cloudAccountBar{display:block !important}
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2';s.onerror=function(){var m=document.getElementById('authMessage');if(m){m.className='message error';m.textContent='Library login gagal dimuat. Periksa koneksi internet atau pemblokir CDN, lalu muat ulang halaman.';}var b=document.getElementById('signInBtn');if(b)b.disabled=true;};document.head.appendChild(s);})()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://gprvpxsmtjmxfxpdangv.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0A97xGjyxBv1Y-VO84sL3g_483XWU4F";
+if (!window.supabase || typeof window.supabase.createClient !== "function") {
+  const authError = document.getElementById("authMessage");
+  if (authError) {
+    authError.className = "message error";
+    authError.textContent = "Library login belum termuat. Periksa koneksi internet, lalu muat ulang halaman.";
+  }
+  throw new Error("Supabase JS library tidak tersedia");
+}
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
@@ -453,6 +461,7 @@ async function signUp() {
 }
 document.getElementById("authForm").addEventListener("submit", async e => {
   e.preventDefault();
+  authMessage("Sedang mencoba masuk…");
   const btn = document.getElementById("signInBtn");
   btn.disabled = true;
   try { await signIn(); }
@@ -1788,6 +1797,16 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   }
 })();
 
+window.addEventListener("error", function (event) {
+  const authVisible = !document.body.classList.contains("authenticated");
+  if (authVisible && event && event.message) {
+    const el = document.getElementById("authMessage");
+    if (el && !el.textContent) {
+      el.className = "message error";
+      el.textContent = "Aplikasi gagal dijalankan: " + event.message + ". Muat ulang halaman; jika berulang, periksa Console browser.";
+    }
+  }
+});
 </script>
 </body>
 </html>
