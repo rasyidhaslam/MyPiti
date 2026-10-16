@@ -402,7 +402,7 @@ body.authenticated #cloudAccountBar{display:block !important}
 </main>
 <footer>SiklusKu · Versi belajar 0.3</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2';s.onerror=function(){var m=document.getElementById('authMessage');if(m){m.className='message error';m.textContent='Library login gagal dimuat. Periksa koneksi internet atau pemblokir CDN, lalu muat ulang halaman.';}var b=document.getElementById('signInBtn');if(b)b.disabled=true;};document.head.appendChild(s);})()"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://gprvpxsmtjmxfxpdangv.supabase.co";
@@ -411,8 +411,15 @@ if (!window.supabase || typeof window.supabase.createClient !== "function") {
   const authError = document.getElementById("authMessage");
   if (authError) {
     authError.className = "message error";
-    authError.textContent = "Library login belum termuat. Periksa koneksi internet, lalu muat ulang halaman.";
+    authError.textContent = "Komponen login belum termuat dari CDN. Periksa koneksi internet atau pemblokir script, lalu muat ulang halaman.";
   }
+  const authFormFallback = document.getElementById("authForm");
+  if (authFormFallback) authFormFallback.addEventListener("submit", function(e) {
+    e.preventDefault();
+    const box = document.getElementById("authMessage");
+    box.className = "message error";
+    box.textContent = "Login belum dapat dijalankan karena library Supabase gagal dimuat. Coba jaringan lain/nonaktifkan pemblokir script, lalu muat ulang.";
+  });
   throw new Error("Supabase JS library tidak tersedia");
 }
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -461,12 +468,21 @@ async function signUp() {
 }
 document.getElementById("authForm").addEventListener("submit", async e => {
   e.preventDefault();
-  authMessage("Sedang mencoba masuk…");
   const btn = document.getElementById("signInBtn");
+  if (!document.getElementById("authEmail").value.trim() ||
+      !document.getElementById("authPassword").value) {
+    authMessage("Isi email dan kata sandi terlebih dahulu.", true);
+    return;
+  }
+  authMessage("Sedang mencoba masuk…");
   btn.disabled = true;
-  try { await signIn(); }
-  catch (err) { authMessage(err.message || "Gagal masuk.", true); }
-  finally { btn.disabled = false; }
+  try {
+    await signIn();
+  } catch (err) {
+    authMessage((err && err.message) || "Gagal masuk. Periksa koneksi dan data login.", true);
+  } finally {
+    btn.disabled = false;
+  }
 });
 document.getElementById("signUpBtn").addEventListener("click", async () => {
   const btn = document.getElementById("signUpBtn");
