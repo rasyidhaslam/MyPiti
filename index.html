@@ -151,30 +151,7 @@ body.authenticated #cloudAccountBar{display:block !important}
 <textarea id="jDesc" rows="2" maxlength="250" required placeholder="Contoh: Menerima pendapatan pekerjaan secara tunai"></textarea>
 
 <h3>Rincian Jurnal</h3>
-<div class="panel" style="background:#f8faf9;border-style:dashed">
-  <h4 style="margin:0 0 6px">Butuh akun baru?</h4>
-  <p class="muted">Tambah akun tanpa meninggalkan form jurnal. Akun langsung tersedia di pilihan baris jurnal.</p>
-  <details id="quickAccountDetails">
-    <summary style="cursor:pointer;color:#173b35;font-weight:bold;padding:8px 0">+ Tambah akun dari jurnal</summary>
-    <form id="quickAccountForm">
-      <label for="quickCode">Kode Akun</label>
-      <input id="quickCode" required maxlength="20" placeholder="Contoh: 103">
-      <label for="quickName">Nama Akun</label>
-      <input id="quickName" required maxlength="80" placeholder="Contoh: Perlengkapan">
-      <label for="quickGroup">Kelompok Akun</label>
-      <select id="quickGroup" required>
-        <option value="Aset">Aset</option><option value="Liabilitas">Liabilitas</option>
-        <option value="Ekuitas">Ekuitas</option><option value="Pendapatan">Pendapatan</option>
-        <option value="Beban">Beban</option>
-      </select>
-      <p class="muted" id="quickNormalHint">Saldo normal: Debit</p>
-      <button class="secondary" type="submit">Simpan & pilih akun</button>
-      <div id="quickAccountMessage" aria-live="polite"></div>
-    </form>
-  </details>
-</div>
 <div id="journalLines"></div>
-<datalist id="journalAccountSuggestions"></datalist>
 <button type="button" class="secondary" id="addLine">+ Tambah Baris Akun</button>
 
 <div class="totals" style="margin-top:15px">
@@ -404,7 +381,7 @@ body.authenticated #cloudAccountBar{display:block !important}
   <div id="backupMessage"></div>
 </section>
 </main>
-<footer>SiklusKu · Jurnal v0.4</footer>
+<footer>SiklusKu · Versi belajar 0.3</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -442,11 +419,7 @@ async function signIn() {
 async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
-  const { data, error } = await supabaseClient.auth.signUp({
-    email,
-    password,
-    options: { data: { siklusku_needs_empty_workspace: true } }
-  });
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
   if (error) throw error;
   if (data.session && data.user) {
     await activateCloud(data.user);
@@ -477,34 +450,6 @@ async function activateCloud(user) {
   JOURNAL_KEY = "siklusku_journals_v1_" + user.id;
   document.body.classList.add("authenticated");
   document.getElementById("authWrap").style.display = "none";
-
-  // Akun yang baru didaftarkan harus memulai workspace kosong satu kali.
-  // Marker disimpan di metadata Supabase Auth sehingga tetap ada meski verifikasi email
-  // mengharuskan pengguna login belakangan atau dari perangkat lain.
-  if (user.user_metadata?.siklusku_needs_empty_workspace === true) {
-    setCloudStatus("Menyiapkan ruang kerja kosong untuk akun baru…");
-    const { error: resetError } = await supabaseClient.from("siklusku_data").upsert({
-      user_id: user.id,
-      accounts: [],
-      journals: [],
-      updated_at: new Date().toISOString()
-    }, { onConflict: "user_id" });
-    if (resetError) {
-      setCloudStatus("Gagal menyiapkan data kosong akun baru: " + resetError.message, true);
-      throw resetError;
-    }
-    const { error: metadataError } = await supabaseClient.auth.updateUser({
-      data: { siklusku_needs_empty_workspace: false }
-    });
-    if (metadataError) {
-      // Data cloud sudah kosong; jika metadata gagal diperbarui, jangan lanjutkan
-      // ke operasi yang bisa menimpa data. Tampilkan error agar dapat diperiksa.
-      setCloudStatus("Data akun baru sudah dikosongkan, tetapi penanda inisialisasi gagal diperbarui: " + metadataError.message, true);
-      throw metadataError;
-    }
-    user.user_metadata.siklusku_needs_empty_workspace = false;
-  }
-
   await loadCloudData();
   setupRealtimeSync();
 }
@@ -557,16 +502,27 @@ async function loadCloudData() {
 function scheduleCloudSync() {
   if (!currentUser || applyingCloudData) return;
   clearTimeout(cloudSyncTimer);
+  const ownerId = currentUser.id;
+  // Snapshot data pada saat perubahan dibuat, bukan saat timer selesai.
+  const accountsSnapshot = JSON.parse(JSON.stringify(accounts));
+  const journalsSnapshot = JSON.parse(JSON.stringify(journals));
   setCloudStatus("Ada perubahan · menunggu sinkronisasi…");
   cloudSyncTimer = setTimeout(async () => {
+    // Jangan pernah mengirim data bila sesi berubah saat timer menunggu.
+    if (!currentUser || currentUser.id !== ownerId) return;
     try {
       const { error } = await supabaseClient.from("siklusku_data").upsert({
-        user_id: currentUser.id, accounts, journals, updated_at: new Date().toISOString()
+        user_id: ownerId, accounts: accountsSnapshot, journals: journalsSnapshot,
+        updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
       if (error) throw error;
-      setCloudStatus("Tersinkron ke cloud · " + new Date().toLocaleTimeString("id-ID"));
+      if (currentUser && currentUser.id === ownerId) {
+        setCloudStatus("Tersinkron ke cloud · " + new Date().toLocaleTimeString("id-ID"));
+      }
     } catch (err) {
-      setCloudStatus("Sinkronisasi gagal: " + (err.message || "periksa koneksi dan konfigurasi database"), true);
+      if (currentUser && currentUser.id === ownerId) {
+        setCloudStatus("Sinkronisasi gagal: " + (err.message || "periksa koneksi dan konfigurasi database"), true);
+      }
     }
   }, 700);
 }
@@ -592,10 +548,19 @@ function setupRealtimeSync() {
     .subscribe();
 }
 async function signOutCloud() {
+  intentionalSignOut = true;
   const { error } = await supabaseClient.auth.signOut();
-  if (error) { setCloudStatus("Gagal keluar: " + error.message, true); return; }
+  if (error) {
+    intentionalSignOut = false;
+    setCloudStatus("Gagal keluar: " + error.message, true);
+    return;
+  }
   currentUser = null;
-  if (cloudChannel) supabaseClient.removeChannel(cloudChannel);
+  clearTimeout(cloudSyncTimer);
+  if (cloudChannel) {
+    await supabaseClient.removeChannel(cloudChannel);
+    cloudChannel = null;
+  }
   document.body.classList.remove("authenticated");
   document.getElementById("authWrap").style.display = "block";
   setCloudStatus("Kamu sudah keluar dari SiklusKu Cloud.");
@@ -742,63 +707,7 @@ document.getElementById("accountForm").addEventListener("submit", e => {
   } else accounts = old;
 });
 
-// Pembuatan akun cepat dari form jurnal: tetap menggunakan penyimpanan akun
-// yang sama sehingga perubahan ikut tersinkron ke Supabase untuk pengguna aktif.
-function quickExpectedNormal(group) {
-  return (group === "Aset" || group === "Beban") ? "Debit" : "Kredit";
-}
-document.getElementById("quickGroup").addEventListener("change", () => {
-  document.getElementById("quickNormalHint").textContent =
-    "Saldo normal: " + quickExpectedNormal(document.getElementById("quickGroup").value);
-});
-document.getElementById("quickAccountForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const code = document.getElementById("quickCode").value.trim();
-  const name = document.getElementById("quickName").value.trim();
-  const group = document.getElementById("quickGroup").value;
-  if (!code || !name) return;
-  if (accounts.some(a => String(a.code).toLowerCase() === code.toLowerCase())) {
-    message("quickAccountMessage", "Kode akun sudah digunakan. Gunakan kode lain.", true);
-    return;
-  }
-  const account = {
-    id:"acc-" + Date.now() + "-" + Math.random().toString(16).slice(2),
-    code, name, group, normal:quickExpectedNormal(group)
-  };
-  const old = accounts;
-  accounts = [...accounts, account];
-  if (!saveData(ACCOUNT_KEY, accounts)) { accounts = old; return; }
-  renderAccounts();
-  refreshAccountOptions();
-  // Pilih akun baru pada baris jurnal terakhir yang belum memiliki akun.
-  const lines = [...document.querySelectorAll("#journalLines .line")];
-  const target = [...lines].reverse().find(line => !line.querySelector(".account-select").value) || lines[lines.length - 1];
-  if (target) {
-    target.querySelector(".account-select").value = account.id;
-    target.querySelector(".account-search").value = accountDisplay(account);
-  }
-  e.target.reset();
-  document.getElementById("quickGroup").value = "Aset";
-  document.getElementById("quickNormalHint").textContent = "Saldo normal: Debit";
-  message("quickAccountMessage", "Akun " + code + " — " + name + " tersimpan dan dipilih pada jurnal.");
-});
-
-function accountDisplay(account) {
-  return `${account.name} (${account.code})`;
-}
-
 function refreshAccountOptions() {
-  const suggestions = document.getElementById("journalAccountSuggestions");
-  if (suggestions) {
-    suggestions.replaceChildren();
-    accounts.forEach(account => {
-      const option = document.createElement("option");
-      option.value = accountDisplay(account);
-      option.label = `${account.code} — ${account.name}`;
-      suggestions.appendChild(option);
-    });
-  }
-
   document.querySelectorAll(".account-select").forEach(select => {
     const current = select.value;
     select.replaceChildren();
@@ -806,30 +715,15 @@ function refreshAccountOptions() {
     first.value = "";
     first.textContent = "-- Pilih akun --";
     select.appendChild(first);
-    accounts.forEach(account => {
+
+    accounts.forEach(a => {
       const option = document.createElement("option");
-      option.value = account.id;
-      option.textContent = `${account.code} - ${account.name}`;
+      option.value = a.id;
+      option.textContent = a.code + " - " + a.name;
       select.appendChild(option);
     });
     select.value = current;
-    const search = select.closest(".line")?.querySelector(".account-search");
-    if (search && current) {
-      const account = accounts.find(a => a.id === current);
-      search.value = account ? accountDisplay(account) : "";
-    }
   });
-}
-
-function syncAccountSearch(input) {
-  const line = input.closest(".line");
-  const select = line?.querySelector(".account-select");
-  if (!select) return;
-  const query = input.value.trim().toLocaleLowerCase("id-ID");
-  const match = accounts.find(account => accountDisplay(account).toLocaleLowerCase("id-ID") === query)
-    || accounts.find(account => String(account.code).toLocaleLowerCase("id-ID") === query);
-  select.value = match ? match.id : "";
-  input.setCustomValidity(match || !query ? "" : "Pilih akun dari daftar saran yang muncul.");
 }
 
 
@@ -874,23 +768,10 @@ function addJournalLine() {
   const accountWrap = document.createElement("div");
   const accountLabel = document.createElement("label");
   accountLabel.textContent = "Akun";
-  const search = document.createElement("input");
-  search.type = "text";
-  search.className = "account-search";
-  search.setAttribute("list", "journalAccountSuggestions");
-  search.placeholder = "Ketik nama akun, mis. ka → Kas";
-  search.autocomplete = "off";
-  search.required = true;
-  search.setAttribute("aria-label", "Cari akun berdasarkan nama atau kode");
   const select = document.createElement("select");
   select.className = "account-select";
   select.required = true;
-  select.tabIndex = -1;
-  select.setAttribute("aria-hidden", "true");
-  select.style.display = "none";
-  search.addEventListener("input", () => syncAccountSearch(search));
-  search.addEventListener("change", () => syncAccountSearch(search));
-  accountLabel.append(search, select);
+  accountLabel.appendChild(select);
   accountWrap.appendChild(accountLabel);
 
   const debitWrap = document.createElement("div");
@@ -1004,7 +885,6 @@ document.getElementById("journalForm").addEventListener("submit", e => {
   }
 
   for (const element of lineElements) {
-    syncAccountSearch(element.querySelector(".account-search"));
     const accountId = element.querySelector(".account-select").value;
     const debitInput = element.querySelector(".debit-input");
     const creditInput = element.querySelector(".credit-input");
@@ -1012,7 +892,7 @@ document.getElementById("journalForm").addEventListener("submit", e => {
 const credit = bacaAngka(creditInput);
 
     if (!accountId) {
-      message("journalMessage", "Pilih akun dari saran pencarian untuk setiap baris.", true);
+      message("journalMessage", "Pilih akun untuk setiap baris.", true);
       return;
     }
     if (debit < 0 || credit < 0 || (debit > 0 && credit > 0) ||
@@ -1677,7 +1557,6 @@ updateBackupSummary();
 
 function renderAllData() {
   renderAccounts();
-  refreshAccountOptions();
   renderJournals();
   renderLedgerOptions();
   renderTrialBalance();
@@ -1686,6 +1565,36 @@ function renderAllData() {
   updateBackupSummary();
   updateTotals();
 }
+// Pasang listener auth sebelum memuat data agar sesi tidak terlewat saat halaman dibuka ulang.
+let authInitializationDone = false;
+let intentionalSignOut = false;
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  // Jangan mengubah tampilan pada INITIAL_SESSION; initializeAuth yang mengatur bootstrap.
+  if (event === "SIGNED_IN" && session && session.user) {
+    // Hindari memanggil operasi Supabase lain langsung di callback auth.
+    queueMicrotask(() => {
+      if (!currentUser || currentUser.id !== session.user.id) {
+        activateCloud(session.user).catch(err => {
+          setCloudStatus("Gagal memuat data cloud: " + (err.message || "kesalahan"), true);
+        });
+      }
+    });
+  } else if (event === "SIGNED_OUT") {
+    currentUser = null;
+    clearTimeout(cloudSyncTimer);
+    if (cloudChannel) {
+      supabaseClient.removeChannel(cloudChannel);
+      cloudChannel = null;
+    }
+    document.body.classList.remove("authenticated");
+    document.getElementById("authWrap").style.display = "block";
+    if (intentionalSignOut) {
+      setCloudStatus("Kamu sudah keluar dari SiklusKu Cloud.");
+      intentionalSignOut = false;
+    }
+  }
+});
+
 (async function initializeAuth() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) {
@@ -1693,16 +1602,18 @@ function renderAllData() {
     return;
   }
   if (data.session && data.session.user) {
-    try { await activateCloud(data.session.user); }
-    catch (err) { setCloudStatus("Gagal memuat data cloud: " + (err.message || "kesalahan"), true); }
-  }
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_OUT") {
-      currentUser = null;
-      document.body.classList.remove("authenticated");
-      document.getElementById("authWrap").style.display = "block";
+    try {
+      await activateCloud(data.session.user);
+      authInitializationDone = true;
+    } catch (err) {
+      // Kegagalan memuat cloud tidak sama dengan logout; pertahankan sesi dan tampilkan status.
+      setCloudStatus("Sesi masih aktif, tetapi data cloud gagal dimuat: " + (err.message || "kesalahan"), true);
     }
-  });
+  } else {
+    currentUser = null;
+    document.body.classList.remove("authenticated");
+    document.getElementById("authWrap").style.display = "block";
+  }
 })();
 
 </script>
