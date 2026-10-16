@@ -451,9 +451,27 @@ function authMessage(text, error=false) {
 async function signIn() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  // SIGNED_IN listener activates the session once; avoid concurrent duplicate loading.
+  // Jangan biarkan layar login menggantung selamanya jika request jaringan tidak selesai.
+  let timeoutId;
+  try {
+    const result = await Promise.race([
+      supabaseClient.auth.signInWithPassword({ email, password }),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(
+          "Permintaan login tidak mendapat respons selama 15 detik. Periksa koneksi internet, lalu coba muat ulang halaman. Jika tetap terjadi, cek status proyek dan URL Supabase."
+        )), 15000);
+      })
+    ]);
+    if (result.error) throw result.error;
+    // SIGNED_IN listener activates the session once; avoid concurrent duplicate loading.
+  } catch (err) {
+    if (err && (err.name === "TypeError" || /fetch|network|failed to fetch/i.test(err.message || ""))) {
+      throw new Error("Tidak dapat menghubungi Supabase. Periksa koneksi internet, URL proyek, atau pemblokir jaringan.");
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
@@ -474,7 +492,7 @@ document.getElementById("authForm").addEventListener("submit", async e => {
     authMessage("Isi email dan kata sandi terlebih dahulu.", true);
     return;
   }
-  authMessage("Sedang mencoba masuk…");
+  authMessage("Menghubungi server login… tunggu maksimal 15 detik.");
   btn.disabled = true;
   try {
     await signIn();
