@@ -117,6 +117,7 @@ body.authenticated #cloudAccountBar{display:block !important}
 <div id="cloudAccountBar" style="display:none;text-align:right;padding:0 16px 8px"><button type="button" class="secondary" onclick="signOutCloud()">Keluar dari akun</button></div>
 
 <nav>
+<button class="active" data-page="dashboard">Dashboard</button>
 <button data-page="accounts">Daftar Akun</button>
 <button data-page="journal">Jurnal Umum</button>
 <button data-page="ledger">Buku Besar</button>
@@ -125,7 +126,6 @@ body.authenticated #cloudAccountBar{display:block !important}
 <button data-page="income">Laba Rugi</button>
 <button data-page="balanceSheet">Neraca</button>
 <button data-page="backup">Backup Data</button>
-<button class="active" data-page="dashboard">Dashboard</button>
 </nav>
 
 <main>
@@ -1821,6 +1821,12 @@ function renderAllData() {
 const dashDateInput = document.getElementById("dashDate");
 if (dashDateInput && !dashDateInput.value) dashDateInput.value = new Date().toISOString().slice(0,10);
 // Form transaksi cepat pada dashboard terhubung ke form Jurnal Umum yang tervalidasi.
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+  })[ch]);
+}
+
 function updateDashboardJournalTools() {
   const debitSel = document.getElementById("dashDebitAccount");
   const creditSel = document.getElementById("dashCreditAccount");
