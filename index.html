@@ -210,8 +210,9 @@ body.authenticated #cloudAccountBar{display:block !important}
 <div class="panel">
 <h3>Jurnal Penutup Otomatis</h3>
 <p class="muted">Tutup akun pendapatan dan beban untuk satu bulan yang dipilih. Jurnal dari bulan lain tidak ikut dihitung. Pastikan transaksi bulan tersebut sudah lengkap dan akun Ikhtisar Laba Rugi tersedia.</p>
-<label for="closingPeriod">Periode penutupan (bulanan)</label><input type="month" id="closingPeriod" required>
-<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup Bulanan</button>
+<label for="closingDate">Tanggal pencatatan jurnal penutup</label><input type="date" id="closingDate" required>
+<p class="muted">Pilih tanggal pencatatan sesuai kebutuhan. Sistem menghitung pendapatan dan beban dari seluruh transaksi pada bulan yang sama dengan tanggal pilihan.</p>
+<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup</button>
 <div id="closingMessage" aria-live="polite"></div>
 </div>
 <div class="panel">
@@ -1119,13 +1120,11 @@ const credit = bacaAngka(creditInput);
 });
 
 const todayForClosing = localDate();
-document.getElementById("closingPeriod").value = todayForClosing.slice(0,7);
+document.getElementById("closingDate").value = todayForClosing;
 document.getElementById("makeClosing").addEventListener("click",()=>{
-  const period=document.getElementById("closingPeriod").value;
-  if(!period){message("closingMessage","Pilih bulan yang akan ditutup.",true);return;}
-  const [year,month]=period.split("-").map(Number);
-  const lastDay=new Date(year,month,0).getDate();
-  const date=period+"-"+String(lastDay).padStart(2,"0");
+  const date=document.getElementById("closingDate").value;
+  if(!date){message("closingMessage","Pilih tanggal pencatatan jurnal penutup.",true);return;}
+  const period=date.slice(0,7);
   const periodJournals=journals.filter(j=>String(j.date||"").slice(0,7)===period);
   if(periodJournals.some(j=>j.closing || String(j.ref||"").startsWith("PENUTUP-"))){
     message("closingMessage","Periode "+period+" sudah memiliki jurnal penutup. Hapus atau koreksi jurnal penutup yang ada sebelum membuat ulang.",true);return;
