@@ -209,9 +209,9 @@ body.authenticated #cloudAccountBar{display:block !important}
 
 <div class="panel">
 <h3>Jurnal Penutup Otomatis</h3>
-<p class="muted">Tutup akun pendapatan dan beban untuk satu bulan yang dipilih. Jurnal dari bulan lain tidak ikut dihitung. Pastikan transaksi bulan tersebut sudah lengkap dan akun Ikhtisar Laba Rugi tersedia.</p>
-<label for="closingPeriod">Periode penutupan (bulanan)</label><input type="month" id="closingPeriod" required>
-<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup Bulanan</button>
+<p class="muted">Pilih tanggal pencatatan jurnal penutup. Sistem menghitung saldo pendapatan dan beban dari seluruh transaksi pada bulan yang sama dengan tanggal pilihan. Jurnal penutup tidak harus dicatat pada hari terakhir bulan.</p>
+<label for="closingDate">Tanggal jurnal penutup</label><input type="date" id="closingDate" required>
+<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup</button>
 <div id="closingMessage" aria-live="polite"></div>
 </div>
 <div class="panel">
@@ -1114,14 +1114,19 @@ const credit = bacaAngka(creditInput);
   } else journals = old;
 });
 
-const todayForClosing = localDate();
-document.getElementById("closingPeriod").value = todayForClosing.slice(0,7);
+const closingDateInput = document.getElementById("closingDate");
+if (closingDateInput) closingDateInput.value = localDate();
 document.getElementById("makeClosing").addEventListener("click",()=>{
-  const period=document.getElementById("closingPeriod").value;
-  if(!period){message("closingMessage","Pilih bulan yang akan ditutup.",true);return;}
-  const [year,month]=period.split("-").map(Number);
-  const lastDay=new Date(year,month,0).getDate();
-  const date=period+"-"+String(lastDay).padStart(2,"0");
+  const date=closingDateInput ? closingDateInput.value : "";
+  if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)){
+    message("closingMessage","Pilih tanggal jurnal penutup terlebih dahulu.",true);return;
+  }
+  const dateParts=date.split("-").map(Number);
+  const selectedDate=new Date(dateParts[0],dateParts[1]-1,dateParts[2]);
+  if(selectedDate.getFullYear()!==dateParts[0] || selectedDate.getMonth()!==dateParts[1]-1 || selectedDate.getDate()!==dateParts[2]){
+    message("closingMessage","Tanggal jurnal penutup tidak valid.",true);return;
+  }
+  const period=date.slice(0,7);
   const periodJournals=journals.filter(j=>String(j.date||"").slice(0,7)===period);
   if(periodJournals.some(j=>j.closing || String(j.ref||"").startsWith("PENUTUP-"))){
     message("closingMessage","Periode "+period+" sudah memiliki jurnal penutup. Hapus atau koreksi jurnal penutup yang ada sebelum membuat ulang.",true);return;
@@ -1135,7 +1140,7 @@ document.getElementById("makeClosing").addEventListener("click",()=>{
   const activeRevenue=revenue.map(a=>({...a,amount:Math.max(0,(totals.get(a.id)?.credit||0)-(totals.get(a.id)?.debit||0))})).filter(a=>a.amount>0);
   const activeExpense=expense.map(a=>({...a,amount:Math.max(0,(totals.get(a.id)?.debit||0)-(totals.get(a.id)?.credit||0))})).filter(a=>a.amount>0);
   if(!activeRevenue.length&&!activeExpense.length){message("closingMessage","Tidak ditemukan saldo pendapatan atau beban pada periode "+period+".",true);return;}
-  const summary=accounts.find(a=>a.name.toLowerCase().includes("ikhtisar laba rugi"));
+  const summary=accounts.find(a=>String(a.name||"").toLowerCase().includes("ikhtisar laba rugi"));
   if(!summary){message("closingMessage","Tambahkan akun bernama 'Ikhtisar Laba Rugi' terlebih dahulu agar jurnal penutup dibuat dengan benar.",true);return;}
   if(!confirm("Tutup periode "+period+"? Akan dibuat jurnal penutup untuk "+activeRevenue.length+" akun pendapatan dan "+activeExpense.length+" akun beban, bertanggal "+date+"."))return;
   const made=[];
@@ -1149,7 +1154,7 @@ document.getElementById("makeClosing").addEventListener("click",()=>{
     const total=lines.reduce((sum,l)=>sum+l.debit,0);made.push({id:"j-close-exp-"+Date.now()+"-2",date,ref:"PENUTUP-BEBAN-"+period,desc:"Jurnal penutup beban "+period,lines,totalDebit:total,totalCredit:total,closing:true,closingPeriod:period});
   }
   const old=journals;journals=[...made,...journals];
-  if(saveData(JOURNAL_KEY,journals)){renderJournals();renderAllData();message("closingMessage","Berhasil menutup pendapatan dan beban periode "+period+". Periksa jurnal penutup pada riwayat jurnal.");}
+  if(saveData(JOURNAL_KEY,journals)){renderJournals();renderAllData();message("closingMessage","Berhasil menutup pendapatan dan beban periode "+period+" dengan tanggal jurnal "+date+". Periksa jurnal penutup pada riwayat jurnal.");}
   else journals=old;
 });
 
