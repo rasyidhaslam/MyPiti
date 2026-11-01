@@ -209,9 +209,9 @@ body.authenticated #cloudAccountBar{display:block !important}
 
 <div class="panel">
 <h3>Jurnal Penutup Otomatis</h3>
-<p class="muted">Pilih tanggal pencatatan jurnal penutup. Sistem menghitung saldo pendapatan dan beban dari seluruh transaksi pada bulan yang sama dengan tanggal pilihan. Jurnal penutup tidak harus dicatat pada hari terakhir bulan.</p>
-<label for="closingDate">Tanggal jurnal penutup</label><input type="date" id="closingDate" required>
-<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup</button>
+<p class="muted">Tutup akun pendapatan dan beban untuk satu bulan yang dipilih. Jurnal dari bulan lain tidak ikut dihitung. Pastikan transaksi bulan tersebut sudah lengkap dan akun Ikhtisar Laba Rugi tersedia.</p>
+<label for="closingPeriod">Periode penutupan (bulanan)</label><input type="month" id="closingPeriod" required>
+<button type="button" class="primary" id="makeClosing">Buat Jurnal Penutup Bulanan</button>
 <div id="closingMessage" aria-live="polite"></div>
 </div>
 <div class="panel">
@@ -405,8 +405,12 @@ body.authenticated #cloudAccountBar{display:block !important}
 <section id="reports" class="hidden">
 <h2>Ekspor Laporan ke Excel</h2>
 <div class="panel">
-<h3>Unduh laporan keuangan</h3>
-<p class="muted">Ekspor laporan yang dihitung dari COA dan jurnal tersimpan ke satu file Excel (.xlsx), dengan sheet Neraca Saldo, Laba Rugi, Posisi Keuangan, Daftar Akun, dan Jurnal Umum.</p>
+<h3>Unduh laporan keuangan berdasarkan tanggal</h3>
+<p class="muted">Pilih rentang tanggal untuk mengekspor laporan ke Excel. Laba Rugi dan Jurnal Umum dihitung dalam rentang tanggal pilihan. Neraca Saldo dan Posisi Keuangan menampilkan saldo sampai dengan tanggal akhir.</p>
+<label for="reportStartDate">Tanggal mulai</label>
+<input type="date" id="reportStartDate" required>
+<label for="reportEndDate">Tanggal akhir</label>
+<input type="date" id="reportEndDate" required>
 <button type="button" class="primary" id="exportReportsExcel">Ekspor Laporan ke Excel (.xlsx)</button>
 <div id="exportReportMessage" aria-live="polite"></div>
 </div>
@@ -1114,19 +1118,14 @@ const credit = bacaAngka(creditInput);
   } else journals = old;
 });
 
-const closingDateInput = document.getElementById("closingDate");
-if (closingDateInput) closingDateInput.value = localDate();
+const todayForClosing = localDate();
+document.getElementById("closingPeriod").value = todayForClosing.slice(0,7);
 document.getElementById("makeClosing").addEventListener("click",()=>{
-  const date=closingDateInput ? closingDateInput.value : "";
-  if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)){
-    message("closingMessage","Pilih tanggal jurnal penutup terlebih dahulu.",true);return;
-  }
-  const dateParts=date.split("-").map(Number);
-  const selectedDate=new Date(dateParts[0],dateParts[1]-1,dateParts[2]);
-  if(selectedDate.getFullYear()!==dateParts[0] || selectedDate.getMonth()!==dateParts[1]-1 || selectedDate.getDate()!==dateParts[2]){
-    message("closingMessage","Tanggal jurnal penutup tidak valid.",true);return;
-  }
-  const period=date.slice(0,7);
+  const period=document.getElementById("closingPeriod").value;
+  if(!period){message("closingMessage","Pilih bulan yang akan ditutup.",true);return;}
+  const [year,month]=period.split("-").map(Number);
+  const lastDay=new Date(year,month,0).getDate();
+  const date=period+"-"+String(lastDay).padStart(2,"0");
   const periodJournals=journals.filter(j=>String(j.date||"").slice(0,7)===period);
   if(periodJournals.some(j=>j.closing || String(j.ref||"").startsWith("PENUTUP-"))){
     message("closingMessage","Periode "+period+" sudah memiliki jurnal penutup. Hapus atau koreksi jurnal penutup yang ada sebelum membuat ulang.",true);return;
@@ -1140,7 +1139,7 @@ document.getElementById("makeClosing").addEventListener("click",()=>{
   const activeRevenue=revenue.map(a=>({...a,amount:Math.max(0,(totals.get(a.id)?.credit||0)-(totals.get(a.id)?.debit||0))})).filter(a=>a.amount>0);
   const activeExpense=expense.map(a=>({...a,amount:Math.max(0,(totals.get(a.id)?.debit||0)-(totals.get(a.id)?.credit||0))})).filter(a=>a.amount>0);
   if(!activeRevenue.length&&!activeExpense.length){message("closingMessage","Tidak ditemukan saldo pendapatan atau beban pada periode "+period+".",true);return;}
-  const summary=accounts.find(a=>String(a.name||"").toLowerCase().includes("ikhtisar laba rugi"));
+  const summary=accounts.find(a=>a.name.toLowerCase().includes("ikhtisar laba rugi"));
   if(!summary){message("closingMessage","Tambahkan akun bernama 'Ikhtisar Laba Rugi' terlebih dahulu agar jurnal penutup dibuat dengan benar.",true);return;}
   if(!confirm("Tutup periode "+period+"? Akan dibuat jurnal penutup untuk "+activeRevenue.length+" akun pendapatan dan "+activeExpense.length+" akun beban, bertanggal "+date+"."))return;
   const made=[];
@@ -1154,7 +1153,7 @@ document.getElementById("makeClosing").addEventListener("click",()=>{
     const total=lines.reduce((sum,l)=>sum+l.debit,0);made.push({id:"j-close-exp-"+Date.now()+"-2",date,ref:"PENUTUP-BEBAN-"+period,desc:"Jurnal penutup beban "+period,lines,totalDebit:total,totalCredit:total,closing:true,closingPeriod:period});
   }
   const old=journals;journals=[...made,...journals];
-  if(saveData(JOURNAL_KEY,journals)){renderJournals();renderAllData();message("closingMessage","Berhasil menutup pendapatan dan beban periode "+period+" dengan tanggal jurnal "+date+". Periksa jurnal penutup pada riwayat jurnal.");}
+  if(saveData(JOURNAL_KEY,journals)){renderJournals();renderAllData();message("closingMessage","Berhasil menutup pendapatan dan beban periode "+period+". Periksa jurnal penutup pada riwayat jurnal.");}
   else journals=old;
 });
 
@@ -1247,74 +1246,101 @@ function exportReportsExcel() {
     status.className = "message error";
     return;
   }
-  // Pastikan laporan terbaru sebelum diekspor.
-  renderTrialBalance();
-  renderIncomeStatement();
-  renderBalanceSheet();
-  const wb = XLSX.utils.book_new();
-  const addTableSheet = (name, title, tableIds) => {
-    const rows = [[title], ["Diekspor pada", new Date().toLocaleString("id-ID")], []];
-    tableIds.forEach(({id, label}) => {
-      rows.push([label]);
-      const table = document.getElementById(id);
-      if (table) {
-        [...table.querySelectorAll("tr")].forEach(tr => {
-          rows.push([...tr.querySelectorAll("th,td")].map(cell => cell.innerText.trim()));
-        });
-      }
-      rows.push([]);
-    });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{wch:32},{wch:24},{wch:20},{wch:20}];
-    XLSX.utils.book_append_sheet(wb, ws, name);
-  };
-  addTableSheet("Neraca Saldo", "NERACA SALDO", [{id:"trialBalanceRows",label:"Rincian Saldo Akun"}]);
-  // Tambahkan header dan total neraca saldo yang berada di luar tbody.
-  const tb = wb.Sheets["Neraca Saldo"];
-  XLSX.utils.sheet_add_aoa(tb, [["Kode","Nama Akun","Debit","Kredit"]], {origin:"A4"});
-  const tbRows = [...document.querySelectorAll("#trialBalanceRows tr")].map(tr => [...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(tb, tbRows, {origin:"A5"});
-  XLSX.utils.sheet_add_aoa(tb, [["TOTAL","",document.getElementById("trialBalanceDebit").innerText,document.getElementById("trialBalanceCredit").innerText],[document.getElementById("trialBalanceStatus").innerText]], {origin:`A${5+tbRows.length}`});
-  addTableSheet("Laba Rugi", "LAPORAN LABA RUGI", [
-    {id:"incomeRevenueRows",label:"Pendapatan"}, {id:"incomeExpenseRows",label:"Beban"}
-  ]);
-  const lr = wb.Sheets["Laba Rugi"];
-  XLSX.utils.sheet_add_aoa(lr, [["Pendapatan","Jumlah"]], {origin:"A4"});
-  let row = 5;
-  const revenueRows = [...document.querySelectorAll("#incomeRevenueRows tr")].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(lr, revenueRows, {origin:`A${row}`}); row += revenueRows.length;
-  XLSX.utils.sheet_add_aoa(lr, [["Total Pendapatan",document.getElementById("incomeRevenueTotal").innerText],[],["Beban","Jumlah"]], {origin:`A${row}`}); row += 4;
-  const expenseRows = [...document.querySelectorAll("#incomeExpenseRows tr")].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-  XLSX.utils.sheet_add_aoa(lr, expenseRows, {origin:`A${row}`}); row += expenseRows.length;
-  XLSX.utils.sheet_add_aoa(lr, [["Total Beban",document.getElementById("incomeExpenseTotal").innerText],[],[document.getElementById("incomeResultLabel").innerText,document.getElementById("incomeNetResult").innerText]], {origin:`A${row}`});
-  addTableSheet("Posisi Keuangan", "LAPORAN POSISI KEUANGAN", [
-    {id:"bsAssetRows",label:"Aset"},{id:"bsLiabilityRows",label:"Liabilitas"},{id:"bsEquityRows",label:"Ekuitas"}
-  ]);
-  const pk = wb.Sheets["Posisi Keuangan"];
-  let pr = 4;
-  for (const [label,bodyId,totalId] of [["ASET","bsAssetRows","bsAssetTotal"],["LIABILITAS","bsLiabilityRows","bsLiabilityTotal"],["EKUITAS","bsEquityRows","bsEquityTotal"]]) {
-    XLSX.utils.sheet_add_aoa(pk, [[label,"Saldo"]], {origin:`A${pr}`}); pr++;
-    const vals = [...document.querySelectorAll(`#${bodyId} tr`)].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.innerText.trim()));
-    XLSX.utils.sheet_add_aoa(pk, vals, {origin:`A${pr}`}); pr += vals.length;
-    XLSX.utils.sheet_add_aoa(pk, [["Total "+label,document.getElementById(totalId).innerText],[]], {origin:`A${pr}`}); pr += 3;
+  const startDate = document.getElementById("reportStartDate").value;
+  const endDate = document.getElementById("reportEndDate").value;
+  if (!startDate || !endDate) {
+    status.textContent = "Pilih tanggal mulai dan tanggal akhir terlebih dahulu.";
+    status.className = "message error";
+    return;
   }
-  XLSX.utils.sheet_add_aoa(pk, [["Ringkasan","Jumlah"],["Total Aset",document.getElementById("bsSummaryAsset").innerText],["Total Liabilitas",document.getElementById("bsSummaryLiability").innerText],["Total Ekuitas",document.getElementById("bsSummaryEquity").innerText],["Liabilitas + Ekuitas",document.getElementById("bsLiabilityEquity").innerText],["Status Neraca",document.getElementById("bsStatus").innerText]], {origin:`A${pr}`});
-  addTableSheet("Daftar Akun", "DAFTAR AKUN (COA)", [{id:"accountRows",label:"Daftar Akun"}]);
-  const coa = wb.Sheets["Daftar Akun"];
-  XLSX.utils.sheet_add_aoa(coa, [["Kode Akun","Nama Akun","Kelompok","Saldo Normal"]], {origin:"A4"});
-  const accountRows = accounts.map(a=>[a.code,a.name,a.group,a.normal]);
-  XLSX.utils.sheet_add_aoa(coa, accountRows, {origin:"A5"});
-  const journalRows = [["Tanggal","Referensi","Keterangan","Kode Akun","Nama Akun","Debit","Kredit"]];
-  journals.slice().reverse().forEach(j => j.lines.forEach(line => journalRows.push([j.date,j.ref||"",j.desc,line.code,line.name,Number(line.debit)||0,Number(line.credit)||0])));
-  const js = XLSX.utils.aoa_to_sheet([["JURNAL UMUM"],["Diekspor pada",new Date().toLocaleString("id-ID")],[],...journalRows]);
-  js["!cols"] = [{wch:14},{wch:16},{wch:32},{wch:14},{wch:24},{wch:18},{wch:18}];
-  XLSX.utils.book_append_sheet(wb, js, "Jurnal Umum");
-  XLSX.writeFile(wb, "SiklusKu-Laporan-" + localDate() + ".xlsx");
-  status.textContent = "File Excel berhasil dibuat. Periksa folder Unduhan.";
+  if (startDate > endDate) {
+    status.textContent = "Tanggal mulai tidak boleh melewati tanggal akhir.";
+    status.className = "message error";
+    return;
+  }
+
+  // Laporan aktivitas menggunakan rentang tanggal; laporan posisi menggunakan saldo sampai tanggal akhir.
+  const periodJournals = journals.filter(j => String(j.date || "") >= startDate && String(j.date || "") <= endDate);
+  const asOfJournals = journals.filter(j => String(j.date || "") <= endDate);
+  const wb = XLSX.utils.book_new();
+  const fmt = value => Number(value) || 0;
+  const addSheet = (name, rows, widths) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = widths.map(w => ({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+    return ws;
+  };
+  const accountTotals = (source, account) => {
+    let debit = 0, credit = 0;
+    source.forEach(j => (j.lines || []).forEach(line => {
+      if (String(line.accountId) === String(account.id)) {
+        debit += fmt(line.debit);
+        credit += fmt(line.credit);
+      }
+    }));
+    return {debit, credit};
+  };
+  const titleRows = (title) => [[title],["Periode aktivitas", startDate + " s.d. " + endDate],["Saldo posisi per",endDate], ["Diekspor pada",new Date().toLocaleString("id-ID")],[]];
+
+  // Neraca Saldo: saldo kumulatif sampai tanggal akhir.
+  const tbRows = [...titleRows("NERACA SALDO") , ["Kode Akun","Nama Akun","Kelompok","Debit","Kredit"]];
+  let totalDebit = 0, totalCredit = 0;
+  accounts.forEach(a => {
+    const t = accountTotals(asOfJournals,a), net = t.debit - t.credit;
+    const debit = Math.max(net,0), credit = Math.max(-net,0);
+    totalDebit += debit; totalCredit += credit;
+    tbRows.push([a.code,a.name,a.group,debit,credit]);
+  });
+  tbRows.push(["TOTAL","","",totalDebit,totalCredit]);
+  addSheet("Neraca Saldo",tbRows,[16,30,20,18,18]);
+
+  // Laba Rugi: hanya transaksi di dalam rentang yang dipilih.
+  const incomeRows = [...titleRows("LAPORAN LABA RUGI"),["Nama Akun Pendapatan","Jumlah"]];
+  let totalRevenue=0,totalExpense=0;
+  const revenues=[], expenses=[];
+  accounts.forEach(a=>{
+    const group=String(a.group||"").toLowerCase();
+    const t=accountTotals(periodJournals,a);
+    if(group.includes("pendapatan")) { const v=t.credit-t.debit; if(v!==0) revenues.push([a.name,v]); totalRevenue+=v; }
+    if(group.includes("beban")) { const v=t.debit-t.credit; if(v!==0) expenses.push([a.name,v]); totalExpense+=v; }
+  });
+  incomeRows.push(...revenues,["TOTAL PENDAPATAN",totalRevenue],[],["Nama Akun Beban","Jumlah"],...expenses,["TOTAL BEBAN",totalExpense],[],[totalRevenue-totalExpense>=0?"LABA BERSIH":"RUGI BERSIH",Math.abs(totalRevenue-totalExpense)]);
+  addSheet("Laba Rugi",incomeRows,[34,22]);
+
+  // Posisi Keuangan: seluruh saldo sampai dengan tanggal akhir, termasuk laba/rugi berjalan.
+  const positionRows=[...titleRows("LAPORAN POSISI KEUANGAN"),["Kelompok","Nama Akun","Saldo"]];
+  let totalAsset=0,totalLiability=0,totalEquity=0, revenueToDate=0,expenseToDate=0;
+  const positionItems=[];
+  accounts.forEach(a=>{
+    const group=String(a.group||"").toLowerCase(), t=accountTotals(asOfJournals,a);
+    if(group.includes("aset")||group.includes("aktiva")) { const v=t.debit-t.credit; totalAsset+=v; if(v!==0) positionItems.push(["ASET",a.name,v]); }
+    else if(group.includes("liabilitas")||group.includes("kewajiban")||group.includes("utang")) { const v=t.credit-t.debit; totalLiability+=v; if(v!==0) positionItems.push(["LIABILITAS",a.name,v]); }
+    else if(group.includes("ekuitas")||group.includes("modal")) { const v=t.credit-t.debit; totalEquity+=v; if(v!==0) positionItems.push(["EKUITAS",a.name,v]); }
+    if(group.includes("pendapatan")) revenueToDate+=t.credit-t.debit;
+    if(group.includes("beban")) expenseToDate+=t.debit-t.credit;
+  });
+  const currentResult=revenueToDate-expenseToDate;
+  positionRows.push(...positionItems,["EKUITAS","Laba/Rugi Periode Berjalan",currentResult]);
+  totalEquity+=currentResult;
+  positionRows.push([], ["RINGKASAN","Jumlah"],["Total Aset",totalAsset],["Total Liabilitas",totalLiability],["Total Ekuitas",totalEquity],["Liabilitas + Ekuitas",totalLiability+totalEquity],["Selisih Aset - (Liabilitas + Ekuitas)",totalAsset-totalLiability-totalEquity]);
+  addSheet("Posisi Keuangan",positionRows,[22,34,22]);
+
+  const coaRows=[...titleRows("DAFTAR AKUN (COA)"),["Kode Akun","Nama Akun","Kelompok","Saldo Normal"],...accounts.map(a=>[a.code,a.name,a.group,a.normal])];
+  addSheet("Daftar Akun",coaRows,[16,30,22,18]);
+
+  const journalRows=[...titleRows("JURNAL UMUM"),["Tanggal","Referensi","Keterangan","Kode Akun","Nama Akun","Debit","Kredit"]];
+  periodJournals.slice().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))).forEach(j=>(j.lines||[]).forEach(line=>journalRows.push([j.date,j.ref||"",j.desc||"",line.code||"",line.name||"",fmt(line.debit),fmt(line.credit)])));
+  addSheet("Jurnal Umum",journalRows,[14,18,32,15,26,18,18]);
+
+  XLSX.writeFile(wb, "SiklusKu-Laporan-" + startDate + "-sampai-" + endDate + ".xlsx");
+  status.textContent = "File Excel berhasil dibuat untuk periode " + startDate + " sampai " + endDate + ". Periksa folder Unduhan.";
   status.className = "message success";
 }
-
 document.getElementById("exportReportsExcel").addEventListener("click", exportReportsExcel);
+const reportToday = localDate();
+const reportMonthStart = reportToday.slice(0,8) + "01";
+document.getElementById("reportStartDate").value = reportMonthStart;
+document.getElementById("reportEndDate").value = reportToday;
 
 function renderLedgerOptions() {
   const select = document.getElementById("ledgerAccount");
