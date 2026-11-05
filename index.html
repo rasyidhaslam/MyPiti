@@ -87,12 +87,57 @@ body.authenticated #cloudAccountBar{display:block !important}
 @media(min-width:700px){#dashboard .dash-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#dashboard .module-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:420px){#dashboard .dash-journal-grid{grid-template-columns:1fr}#dashboard .dash-journal .dash-full{grid-column:auto}#dashboard .module-card{padding:12px;gap:9px}#dashboard .module-icon{width:36px;height:36px;flex-basis:36px}}
 
+
+/* Penyegaran dashboard mobile dan navigasi hamburger; tidak mengubah mesin akuntansi. */
+.app-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px}
+.brand-lockup h1{margin:0 0 4px;font-size:24px;letter-spacing:-.5px}.brand-lockup p{margin:0;font-size:12px;color:#d5e5df}
+.mobile-menu-toggle{display:none;width:44px;height:42px;border:1px solid rgba(255,255,255,.28);border-radius:11px;background:rgba(255,255,255,.10);padding:10px;cursor:pointer}
+.mobile-menu-toggle span{display:block;height:2px;background:#fff;border-radius:2px;margin:4px 0}
+#dashboard .dash-hero{margin:4px 0 16px}
+#dashboard .profit-card{box-shadow:0 12px 28px rgba(23,59,53,.12)}
+#dashboard .dash-stat{box-shadow:0 3px 12px rgba(26,55,44,.035)}
+#dashboard .dash-monthly{border-radius:16px;padding:17px;margin:0 0 18px}
+#dashboard .dash-monthly-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#dashboard .dash-monthly-head h3{margin:0 0 5px;font-size:16px;color:#223b35}
+#dashboard .dash-monthly-head p{margin:0}
+#dashboard .dash-monthly-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#edf5f0;color:#245c4e;font-size:20px}
+#dashboard .dash-monthly-content{margin-top:14px}
+#dashboard .dash-month-row{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:10px;margin:11px 0}
+#dashboard .dash-month-label{font-size:12px;color:#68786f}
+#dashboard .dash-month-track{height:9px;border-radius:20px;background:#edf1ee;overflow:hidden}
+#dashboard .dash-month-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#397b67,#86b9a1);min-width:2px}
+#dashboard .dash-month-value{font-size:11px;color:#43584f;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+#dashboard .dash-journal{box-shadow:0 4px 16px rgba(26,55,44,.04)}
+#dashboard .dash-journal-grid{gap:0 12px}
+@media(max-width:649px){
+  .app-header{padding:14px 16px}.mobile-menu-toggle{display:block}
+  body.authenticated nav#mainNavigation{display:none;flex-direction:column;gap:6px;padding:10px 14px;border-bottom:1px solid #e5ebe7;box-shadow:0 8px 18px rgba(20,50,40,.08)}
+  body.authenticated nav#mainNavigation.menu-open{display:flex}
+  nav#mainNavigation button{width:100%;text-align:left;padding:13px 14px;border-radius:10px}
+  main{padding:13px}
+  #dashboard .dash-hero{display:block;margin:3px 0 14px}
+  #dashboard .dash-period{display:inline-block;margin-top:10px}
+  #dashboard .profit-card{padding:19px;border-radius:16px}
+  #dashboard .dash-stats{gap:9px;margin-bottom:16px}
+  #dashboard .dash-stat{padding:13px;border-radius:12px}
+  #dashboard .dash-stat strong{font-size:18px}
+  #dashboard .dash-section-title{margin:19px 0 10px}
+  #dashboard .dash-journal{padding:15px}
+  #dashboard .dash-journal-grid{grid-template-columns:1fr}
+  #dashboard .dash-journal .dash-full{grid-column:auto}
+  #dashboard .module-grid{grid-template-columns:1fr 1fr;gap:9px}
+  #dashboard .module-card{min-height:76px;padding:11px;gap:9px}
+  #dashboard .module-card strong{font-size:12px}
+  #dashboard .module-card small{font-size:10px}
+}
+@media(min-width:650px){.mobile-menu-toggle{display:none}}
+
 </style>
 </head>
 <body>
-<header>
-<h1>SiklusKu</h1>
-<p>Personal Accounting System</p>
+<header class="app-header">
+  <div class="brand-lockup"><h1>SiklusKu</h1><p>Personal Accounting System</p></div>
+  <button type="button" id="mobileMenuToggle" class="mobile-menu-toggle" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="mainNavigation"><span></span><span></span><span></span></button>
 </header>
 
 <section id="authWrap" class="auth-wrap">
@@ -116,7 +161,7 @@ body.authenticated #cloudAccountBar{display:block !important}
 <div id="cloudStatus" class="cloud-status" style="display:none">Cloud belum terhubung.</div>
 <div id="cloudAccountBar" style="display:none;text-align:right;padding:0 16px 8px"><button type="button" class="secondary" onclick="signOutCloud()">Keluar dari akun</button></div>
 
-<nav>
+<nav id="mainNavigation">
 <button class="active" data-page="dashboard">Dashboard</button>
 <button data-page="accounts">Daftar Akun</button>
 <button data-page="journal">Jurnal Umum</button>
@@ -447,7 +492,11 @@ body.authenticated #cloudAccountBar{display:block !important}
   <div class="dash-stat"><span>Transaksi Jurnal</span><strong id="journalCount">0</strong></div>
   <div class="dash-stat"><span>Total Debit Jurnal</span><strong id="debitSummary">Rp0</strong></div>
 </div>
-<div class="dash-section-title"><h3>Catat transaksi</h3><span class="muted">Pencatatan jurnal</span></div>
+<div class="dash-monthly panel">
+  <div class="dash-monthly-head"><div><h3>Ringkasan jurnal bulanan</h3><p class="muted">Total nilai debit jurnal yang tercatat per bulan.</p></div><span class="dash-monthly-icon">▥</span></div>
+  <div id="dashMonthlySummary" class="dash-monthly-content"><p class="muted">Ringkasan akan tampil setelah data jurnal dimuat.</p></div>
+</div>
+<div class="dash-section-title"><h3>Catat transaksi</h3><span class="muted">Jurnal double-entry</span></div>
 <div class="dash-journal">
   <p class="muted" style="margin-top:0">Isi transaksi di sini. Transaksi akan diteruskan ke form Jurnal Umum agar debit-kredit diperiksa sebelum disimpan.</p>
   <form id="dashQuickJournalForm">
@@ -1837,6 +1886,42 @@ function updateDashboardSummary() {
   const period = document.getElementById("dashboardPeriod");
   if (period) period.textContent = "DIPERBARUI " + new Date().toLocaleDateString("id-ID", {day:"2-digit", month:"short", year:"numeric"}).toUpperCase();
 }
+
+function renderDashboardMonthlySummary() {
+  const host = document.getElementById("dashMonthlySummary");
+  if (!host || !Array.isArray(journals)) return;
+  const months = new Map();
+  journals.forEach(j => {
+    const date = String(j.date || "");
+    if (!/^\d{4}-\d{2}/.test(date)) return;
+    const key = date.slice(0,7);
+    const amount = Number(j.totalDebit || j.total || 0);
+    months.set(key, (months.get(key) || 0) + (Number.isFinite(amount) ? amount : 0));
+  });
+  const entries = [...months.entries()].sort((a,b)=>a[0].localeCompare(b[0])).slice(-6);
+  if (!entries.length) {
+    host.innerHTML = '<p class="muted">Belum ada jurnal untuk diringkas. Ringkasan akan muncul setelah transaksi disimpan.</p>';
+    return;
+  }
+  const max = Math.max(...entries.map(x=>x[1]),1);
+  host.innerHTML = entries.map(([key,value]) => {
+    const label = new Date(key + "-02T00:00:00").toLocaleDateString("id-ID",{month:"short",year:"2-digit"});
+    const width = Math.max(2, value/max*100);
+    return `<div class="dash-month-row"><span class="dash-month-label">${label}</span><div class="dash-month-track"><div class="dash-month-fill" style="width:${width}%"></div></div><span class="dash-month-value">${formatRupiah(value)}</span></div>`;
+  }).join("");
+}
+const mobileMenuToggle = document.getElementById("mobileMenuToggle");
+const mainNavigation = document.getElementById("mainNavigation");
+mobileMenuToggle?.addEventListener("click", () => {
+  const isOpen = mainNavigation?.classList.toggle("menu-open") || false;
+  mobileMenuToggle.setAttribute("aria-expanded", String(isOpen));
+  mobileMenuToggle.setAttribute("aria-label", isOpen ? "Tutup menu navigasi" : "Buka menu navigasi");
+});
+mainNavigation?.querySelectorAll("button[data-page]").forEach(button => button.addEventListener("click", () => {
+  mainNavigation.classList.remove("menu-open");
+  mobileMenuToggle?.setAttribute("aria-expanded", "false");
+  mobileMenuToggle?.setAttribute("aria-label", "Buka menu navigasi");
+}));
 document.querySelectorAll("[data-dash-page]").forEach(button => button.addEventListener("click", () => {
   const target = button.getAttribute("data-dash-page");
   const navButton = document.querySelector('nav button[data-page="' + target + '"]');
@@ -1857,6 +1942,7 @@ function renderAllData() {
   refreshCycleAccountOptions();
   renderCycles();
   updateDashboardJournalTools();
+  renderDashboardMonthlySummary();
 }
 const dashDateInput = document.getElementById("dashDate");
 if (dashDateInput && !dashDateInput.value) dashDateInput.value = new Date().toISOString().slice(0,10);
